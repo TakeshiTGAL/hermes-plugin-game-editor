@@ -1,0 +1,746 @@
+{
+ "editor_status\tstate": {
+  "tool": "editor_look",
+  "op": "state"
+ },
+ "editor_status\topen_scenes": {
+  "tool": "editor_look",
+  "op": "open_scenes"
+ },
+ "editor_status\tselection": {
+  "tool": "editor_look",
+  "op": "selection"
+ },
+ "editor_status\tmonitors": {
+  "tool": "editor_look",
+  "op": "monitors"
+ },
+ "editor_status\tsessions": {
+  "tool": "editor_look",
+  "op": "sessions"
+ },
+ "read_logs\tread": {
+  "tool": "editor_look",
+  "op": "read_logs"
+ },
+ "class_reference\tclass": {
+  "tool": "editor_look",
+  "op": "class"
+ },
+ "screenshot\tcapture": {
+  "tool": "editor_do",
+  "op": "screenshot"
+ },
+ "class_reference\tresource_type": {
+  "tool": "editor_do",
+  "op": "resource_type"
+ },
+ "class_reference\tshader_nodes": {
+  "tool": "editor_do",
+  "op": "shader_nodes"
+ },
+ "editor_control\tquit": {
+  "tool": "editor_do",
+  "op": "quit"
+ },
+ "editor_control\tclear_logs": {
+  "tool": "editor_do",
+  "op": "clear_logs"
+ },
+ "editor_control\tselect": {
+  "tool": "editor_do",
+  "op": "select"
+ },
+ "editor_control\treload_plugin": {
+  "tool": "editor_do",
+  "op": "reload_plugin"
+ },
+ "editor_control\tactivate_session": {
+  "tool": "editor_do",
+  "op": "activate_session"
+ },
+ "scene_tree\ttree": {
+  "tool": "scene_look",
+  "op": "scene_tree"
+ },
+ "find_nodes\tfind": {
+  "tool": "scene_look",
+  "op": "find_nodes"
+ },
+ "node_properties\tproperties": {
+  "tool": "scene_look",
+  "op": "properties"
+ },
+ "node_properties\tchildren": {
+  "tool": "scene_look",
+  "op": "children"
+ },
+ "node_properties\tgroups": {
+  "tool": "scene_look",
+  "op": "groups"
+ },
+ "node_properties\tsignals": {
+  "tool": "scene_look",
+  "op": "signals"
+ },
+ "node_properties\tresource": {
+  "tool": "scene_look",
+  "op": "resource"
+ },
+ "inspect_node\tproperties": {
+  "tool": "scene_do",
+  "op": "properties"
+ },
+ "inspect_node\tchildren": {
+  "tool": "scene_do",
+  "op": "children"
+ },
+ "inspect_node\tgroups": {
+  "tool": "scene_do",
+  "op": "groups"
+ },
+ "inspect_node\tsignals": {
+  "tool": "scene_do",
+  "op": "signals"
+ },
+ "inspect_node\tresource": {
+  "tool": "scene_do",
+  "op": "resource"
+ },
+ "open_scene\topen": {
+  "tool": "scene_do",
+  "op": "open_scene"
+ },
+ "add_node\tadd": {
+  "tool": "scene_do",
+  "op": "add_node"
+ },
+ "set_node_property\tset": {
+  "tool": "scene_do",
+  "op": "set_node_property"
+ },
+ "edit_node\trename": {
+  "tool": "scene_do",
+  "op": "rename"
+ },
+ "edit_node\tmove": {
+  "tool": "scene_do",
+  "op": "move"
+ },
+ "edit_node\treparent": {
+  "tool": "scene_do",
+  "op": "reparent"
+ },
+ "edit_node\tduplicate": {
+  "tool": "scene_do",
+  "op": "duplicate"
+ },
+ "edit_node\tadd_to_group": {
+  "tool": "scene_do",
+  "op": "add_to_group"
+ },
+ "edit_node\tremove_from_group": {
+  "tool": "scene_do",
+  "op": "remove_from_group"
+ },
+ "edit_node\tattach_script": {
+  "tool": "scene_do",
+  "op": "attach_script"
+ },
+ "edit_node\tdetach_script": {
+  "tool": "scene_do",
+  "op": "detach_script"
+ },
+ "delete_node\tdelete": {
+  "tool": "scene_do",
+  "op": "delete_node"
+ },
+ "save_scene\tsave": {
+  "tool": "scene_do",
+  "op": "save"
+ },
+ "save_scene\tsave_as": {
+  "tool": "scene_do",
+  "op": "save_as"
+ },
+ "new_scene\tcreate": {
+  "tool": "scene_do",
+  "op": "new_scene"
+ },
+ "revert_scene\trevert": {
+  "tool": "scene_do",
+  "op": "revert_scene"
+ },
+ "connect_signal\tconnect": {
+  "tool": "scene_do",
+  "op": "connect"
+ },
+ "connect_signal\tdisconnect": {
+  "tool": "scene_do",
+  "op": "disconnect"
+ },
+ "read_script\tsource": {
+  "tool": "script_look",
+  "op": "source"
+ },
+ "read_script\toutline": {
+  "tool": "script_look",
+  "op": "outline"
+ },
+ "create_script\tcreate": {
+  "tool": "script_do",
+  "op": "create_script"
+ },
+ "edit_script\tscript": {
+  "tool": "script_do",
+  "op": "script"
+ },
+ "edit_script\tshader": {
+  "tool": "script_do",
+  "op": "shader"
+ },
+ "read_file\ttext": {
+  "tool": "file_look",
+  "op": "text"
+ },
+ "search_files\tfiles": {
+  "tool": "file_look",
+  "op": "files"
+ },
+ "search_files\tresources": {
+  "tool": "file_look",
+  "op": "resources"
+ },
+ "read_file\tresource": {
+  "tool": "file_do",
+  "op": "resource"
+ },
+ "write_file\twrite": {
+  "tool": "file_do",
+  "op": "write_file"
+ },
+ "delete_file\tremove": {
+  "tool": "file_do",
+  "op": "delete_file"
+ },
+ "delete_file_permanently\tremove": {
+  "tool": "file_do",
+  "op": "delete_file_permanently"
+ },
+ "move_file\tmove": {
+  "tool": "file_do",
+  "op": "move"
+ },
+ "move_file\trename": {
+  "tool": "file_do",
+  "op": "rename"
+ },
+ "import_files\tscan": {
+  "tool": "file_do",
+  "op": "scan"
+ },
+ "import_files\treimport": {
+  "tool": "file_do",
+  "op": "reimport"
+ },
+ "project_setting\tget": {
+  "tool": "project_look",
+  "op": "get"
+ },
+ "project_setting\tautoloads": {
+  "tool": "project_look",
+  "op": "autoloads"
+ },
+ "project_setting\tinput_map": {
+  "tool": "project_look",
+  "op": "input_map"
+ },
+ "project_setting\ttest_results": {
+  "tool": "project_look",
+  "op": "test_results"
+ },
+ "project_setting\taddon_tools": {
+  "tool": "project_look",
+  "op": "addon_tools"
+ },
+ "edit_project_settings\tset": {
+  "tool": "project_do",
+  "op": "set"
+ },
+ "edit_project_settings\tset_main_scene": {
+  "tool": "project_do",
+  "op": "set_main_scene"
+ },
+ "edit_project_settings\tautoload_add": {
+  "tool": "project_do",
+  "op": "autoload_add"
+ },
+ "edit_project_settings\tautoload_remove": {
+  "tool": "project_do",
+  "op": "autoload_remove"
+ },
+ "edit_project_settings\tinput_add_action": {
+  "tool": "project_do",
+  "op": "input_add_action"
+ },
+ "edit_project_settings\tinput_ensure_action": {
+  "tool": "project_do",
+  "op": "input_ensure_action"
+ },
+ "edit_project_settings\tinput_remove_action": {
+  "tool": "project_do",
+  "op": "input_remove_action"
+ },
+ "edit_project_settings\tinput_bind": {
+  "tool": "project_do",
+  "op": "input_bind"
+ },
+ "edit_project_settings\tinput_ensure_binding": {
+  "tool": "project_do",
+  "op": "input_ensure_binding"
+ },
+ "run_game\trun": {
+  "tool": "project_do",
+  "op": "run_game"
+ },
+ "stop_game\tstop": {
+  "tool": "project_do",
+  "op": "stop_game"
+ },
+ "read_assets\tmaterial": {
+  "tool": "asset_do",
+  "op": "material"
+ },
+ "read_assets\tshader": {
+  "tool": "asset_do",
+  "op": "shader"
+ },
+ "read_assets\tvisual_shader": {
+  "tool": "asset_do",
+  "op": "visual_shader"
+ },
+ "read_assets\tshader_check": {
+  "tool": "asset_do",
+  "op": "shader_check"
+ },
+ "read_assets\taudio": {
+  "tool": "asset_do",
+  "op": "audio"
+ },
+ "read_assets\ttileset_tiles": {
+  "tool": "asset_do",
+  "op": "tileset_tiles"
+ },
+ "read_assets\ttileset_image": {
+  "tool": "asset_do",
+  "op": "tileset_image"
+ },
+ "edit_animation\tplayer_create": {
+  "tool": "asset_do",
+  "op": "player_create"
+ },
+ "edit_animation\tcreate": {
+  "tool": "asset_do",
+  "op": "create"
+ },
+ "edit_animation\tcreate_simple": {
+  "tool": "asset_do",
+  "op": "create_simple"
+ },
+ "edit_animation\tadd_property_track": {
+  "tool": "asset_do",
+  "op": "add_property_track"
+ },
+ "edit_animation\tadd_method_track": {
+  "tool": "asset_do",
+  "op": "add_method_track"
+ },
+ "edit_animation\tset_autoplay": {
+  "tool": "asset_do",
+  "op": "set_autoplay"
+ },
+ "edit_animation\tplay": {
+  "tool": "asset_do",
+  "op": "play"
+ },
+ "edit_animation\tstop": {
+  "tool": "asset_do",
+  "op": "stop"
+ },
+ "edit_ui\tbuild_layout": {
+  "tool": "asset_do",
+  "op": "build_layout"
+ },
+ "edit_ui\tset_text": {
+  "tool": "asset_do",
+  "op": "set_text"
+ },
+ "edit_ui\tset_richtext": {
+  "tool": "asset_do",
+  "op": "set_richtext"
+ },
+ "edit_ui\tset_anchor_preset": {
+  "tool": "asset_do",
+  "op": "set_anchor_preset"
+ },
+ "edit_ui\tdraw_recipe": {
+  "tool": "asset_do",
+  "op": "draw_recipe"
+ },
+ "edit_ui\ttheme_create": {
+  "tool": "asset_do",
+  "op": "theme_create"
+ },
+ "edit_ui\ttheme_apply": {
+  "tool": "asset_do",
+  "op": "theme_apply"
+ },
+ "edit_ui\ttheme_set_color": {
+  "tool": "asset_do",
+  "op": "theme_set_color"
+ },
+ "edit_ui\ttheme_set_constant": {
+  "tool": "asset_do",
+  "op": "theme_set_constant"
+ },
+ "edit_ui\ttheme_set_font": {
+  "tool": "asset_do",
+  "op": "theme_set_font"
+ },
+ "edit_ui\ttheme_set_font_size": {
+  "tool": "asset_do",
+  "op": "theme_set_font_size"
+ },
+ "edit_ui\ttheme_set_icon": {
+  "tool": "asset_do",
+  "op": "theme_set_icon"
+ },
+ "edit_ui\ttheme_set_stylebox_flat": {
+  "tool": "asset_do",
+  "op": "theme_set_stylebox_flat"
+ },
+ "edit_ui\ttheme_set_stylebox_texture": {
+  "tool": "asset_do",
+  "op": "theme_set_stylebox_texture"
+ },
+ "edit_ui\ttheme_stylebox_override": {
+  "tool": "asset_do",
+  "op": "theme_stylebox_override"
+ },
+ "edit_material\tmaterial_create": {
+  "tool": "asset_do",
+  "op": "material_create"
+ },
+ "edit_material\tmaterial_set_param": {
+  "tool": "asset_do",
+  "op": "material_set_param"
+ },
+ "edit_material\tmaterial_set_shader_param": {
+  "tool": "asset_do",
+  "op": "material_set_shader_param"
+ },
+ "edit_material\tmaterial_assign": {
+  "tool": "asset_do",
+  "op": "material_assign"
+ },
+ "edit_material\tmaterial_apply_to_node": {
+  "tool": "asset_do",
+  "op": "material_apply_to_node"
+ },
+ "edit_material\tmaterial_apply_preset": {
+  "tool": "asset_do",
+  "op": "material_apply_preset"
+ },
+ "edit_material\tshader_create": {
+  "tool": "asset_do",
+  "op": "shader_create"
+ },
+ "edit_material\tvisual_shader_create": {
+  "tool": "asset_do",
+  "op": "visual_shader_create"
+ },
+ "edit_material\tvisual_shader_edit": {
+  "tool": "asset_do",
+  "op": "visual_shader_edit"
+ },
+ "edit_particles\tparticle_create": {
+  "tool": "asset_do",
+  "op": "particle_create"
+ },
+ "edit_particles\tparticle_set_main": {
+  "tool": "asset_do",
+  "op": "particle_set_main"
+ },
+ "edit_particles\tparticle_set_process": {
+  "tool": "asset_do",
+  "op": "particle_set_process"
+ },
+ "edit_particles\tparticle_set_draw_pass": {
+  "tool": "asset_do",
+  "op": "particle_set_draw_pass"
+ },
+ "edit_particles\tparticle_preset": {
+  "tool": "asset_do",
+  "op": "particle_preset"
+ },
+ "edit_camera\tcamera_create": {
+  "tool": "asset_do",
+  "op": "camera_create"
+ },
+ "edit_camera\tcamera_configure": {
+  "tool": "asset_do",
+  "op": "camera_configure"
+ },
+ "edit_camera\tcamera_set_limits_2d": {
+  "tool": "asset_do",
+  "op": "camera_set_limits_2d"
+ },
+ "edit_camera\tcamera_set_damping_2d": {
+  "tool": "asset_do",
+  "op": "camera_set_damping_2d"
+ },
+ "edit_camera\tcamera_follow_2d": {
+  "tool": "asset_do",
+  "op": "camera_follow_2d"
+ },
+ "edit_camera\tcamera_preset": {
+  "tool": "asset_do",
+  "op": "camera_preset"
+ },
+ "edit_csg\tcsg_create": {
+  "tool": "asset_do",
+  "op": "csg_create"
+ },
+ "edit_csg\tcsg_set_operation": {
+  "tool": "asset_do",
+  "op": "csg_set_operation"
+ },
+ "edit_level\ttile_set_cell": {
+  "tool": "asset_do",
+  "op": "tile_set_cell"
+ },
+ "edit_level\ttile_fill_rect": {
+  "tool": "asset_do",
+  "op": "tile_fill_rect"
+ },
+ "edit_level\tgridmap_set_item": {
+  "tool": "asset_do",
+  "op": "gridmap_set_item"
+ },
+ "edit_level\tgridmap_fill": {
+  "tool": "asset_do",
+  "op": "gridmap_fill"
+ },
+ "edit_level\tnav_bake": {
+  "tool": "asset_do",
+  "op": "nav_bake"
+ },
+ "edit_level\taudio_player_create": {
+  "tool": "asset_do",
+  "op": "audio_player_create"
+ },
+ "edit_level\taudio_set_stream": {
+  "tool": "asset_do",
+  "op": "audio_set_stream"
+ },
+ "edit_level\taudio_set_playback": {
+  "tool": "asset_do",
+  "op": "audio_set_playback"
+ },
+ "edit_level\taudio_play": {
+  "tool": "asset_do",
+  "op": "audio_play"
+ },
+ "edit_level\taudio_stop": {
+  "tool": "asset_do",
+  "op": "audio_stop"
+ },
+ "edit_resources\tcreate": {
+  "tool": "asset_do",
+  "op": "edit_resources_create"
+ },
+ "edit_resources\tassign": {
+  "tool": "asset_do",
+  "op": "assign"
+ },
+ "edit_resources\tcurve_set_points": {
+  "tool": "asset_do",
+  "op": "curve_set_points"
+ },
+ "edit_resources\tenvironment_create": {
+  "tool": "asset_do",
+  "op": "environment_create"
+ },
+ "edit_resources\tgradient_texture_create": {
+  "tool": "asset_do",
+  "op": "gradient_texture_create"
+ },
+ "edit_resources\tnoise_texture_create": {
+  "tool": "asset_do",
+  "op": "noise_texture_create"
+ },
+ "edit_resources\tcollision_shape_fit": {
+  "tool": "asset_do",
+  "op": "collision_shape_fit"
+ },
+ "edit_resources\tcollision_shape_generate": {
+  "tool": "asset_do",
+  "op": "collision_shape_generate"
+ },
+ "delete_asset\tanimation": {
+  "tool": "asset_do",
+  "op": "animation"
+ },
+ "delete_asset\ttilemap": {
+  "tool": "asset_do",
+  "op": "tilemap"
+ },
+ "delete_asset\tgridmap": {
+  "tool": "asset_do",
+  "op": "gridmap"
+ },
+ "read_assets\tmaterials": {
+  "tool": "asset_look",
+  "op": "materials"
+ },
+ "read_assets\tanimation": {
+  "tool": "asset_look",
+  "op": "animation"
+ },
+ "read_assets\tanimations": {
+  "tool": "asset_look",
+  "op": "animations"
+ },
+ "read_assets\tanimation_check": {
+  "tool": "asset_look",
+  "op": "animation_check"
+ },
+ "read_assets\tcamera": {
+  "tool": "asset_look",
+  "op": "camera"
+ },
+ "read_assets\tcameras": {
+  "tool": "asset_look",
+  "op": "cameras"
+ },
+ "read_assets\tparticles": {
+  "tool": "asset_look",
+  "op": "particles"
+ },
+ "read_assets\ttiles": {
+  "tool": "asset_look",
+  "op": "tiles"
+ },
+ "read_assets\tgridmap_cells": {
+  "tool": "asset_look",
+  "op": "gridmap_cells"
+ },
+ "read_assets\tgridmap_items": {
+  "tool": "asset_look",
+  "op": "gridmap_items"
+ },
+ "read_assets\tnav_path": {
+  "tool": "asset_look",
+  "op": "nav_path"
+ },
+ "edit_animation\tpreset_fade": {
+  "tool": "asset_look",
+  "op": "preset_fade"
+ },
+ "edit_animation\tpreset_slide": {
+  "tool": "asset_look",
+  "op": "preset_slide"
+ },
+ "edit_animation\tpreset_shake": {
+  "tool": "asset_look",
+  "op": "preset_shake"
+ },
+ "edit_animation\tpreset_pulse": {
+  "tool": "asset_look",
+  "op": "preset_pulse"
+ },
+ "edit_particles\tparticle_restart": {
+  "tool": "asset_look",
+  "op": "particle_restart"
+ },
+ "read_game\tscene_tree": {
+  "tool": "game_do",
+  "op": "scene_tree"
+ },
+ "read_game\tnode": {
+  "tool": "game_do",
+  "op": "node"
+ },
+ "read_game\tui": {
+  "tool": "game_do",
+  "op": "ui"
+ },
+ "read_game\tdebug": {
+  "tool": "game_do",
+  "op": "debug"
+ },
+ "read_game\tinput": {
+  "tool": "game_do",
+  "op": "input"
+ },
+ "game_input\tkey": {
+  "tool": "game_do",
+  "op": "key"
+ },
+ "game_input\tmouse": {
+  "tool": "game_do",
+  "op": "mouse"
+ },
+ "game_input\tgamepad": {
+  "tool": "game_do",
+  "op": "gamepad"
+ },
+ "game_input\taction": {
+  "tool": "game_do",
+  "op": "action"
+ },
+ "game_input\tsequence": {
+  "tool": "game_do",
+  "op": "sequence"
+ },
+ "game_input\tsuspend": {
+  "tool": "game_do",
+  "op": "suspend"
+ },
+ "game_input\tresume": {
+  "tool": "game_do",
+  "op": "resume"
+ },
+ "game_input\tnext_frame": {
+  "tool": "game_do",
+  "op": "next_frame"
+ },
+ "run_game_code\teval": {
+  "tool": "game_do",
+  "op": "run_game_code"
+ },
+ "play_session\trun": {
+  "tool": "game_do",
+  "op": "play_session"
+ },
+ "run_tests\tgodot_ai": {
+  "tool": "checks",
+  "op": "godot_ai"
+ },
+ "run_tests\tgut": {
+  "tool": "checks",
+  "op": "gut"
+ },
+ "run_tests\tgdunit4": {
+  "tool": "checks",
+  "op": "gdunit4"
+ },
+ "batch_execute\tbatch": {
+  "tool": "batch",
+  "op": "batch_execute"
+ },
+ "export_game\texport": {
+  "tool": "ship_build",
+  "op": "export_game"
+ }
+}

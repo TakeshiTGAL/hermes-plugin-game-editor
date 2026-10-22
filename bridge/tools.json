@@ -1,0 +1,5205 @@
+{
+ "upstream": "godot-ai==4.3.0",
+ "tools": [
+  {
+   "name": "editor_look",
+   "tier": "read",
+   "description": "Godot editor state, logs and class info. Does not change the project. Ops: state, open_scenes, selection, monitors, sessions, read_logs, class.",
+   "default_op": "state",
+   "multi": true,
+   "ops": {
+    "state": {
+     "upstream": "editor_state",
+     "op": null,
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "state()",
+     "doc": "Get current Godot editor state: version, readiness, open scene, play state. Resource form: ``godot://editor/state`` — prefer for active-session reads. Also reachable as ``editor_manage(op=\"state\")`` (same handler) for clients that prefer a single rolled-up tool. Code-mode MCP adapters keep the server and tool names separate: ``call('godot-ai', 'editor_state', {})``. Never pass a server-prefixed tool name such as ``godot-ai/get_editor_state``; that is neither the adapter's call signature nor a registered tool. For dedicated current- scene data, use ``readResource('godot-ai', 'godot://scene/current')``. Side effect: refreshes the server's session readiness cache from the live editor reply. Useful as a recovery step after a write call is rejected as ``EDITOR_NOT_READY (state=playing)`` when you already know the game has stopped — calling ``editor_state`` once syncs the cache and the next write proceeds. Issue #262. Response includes ``game_status`` for authoritative game liveness, plus ``helper_live`` (status == \"live\") and ``session_active`` (status not in {\"not_live\", \"stopped\"}) mirrored from the same fields inside ``game_status``. ``is_playing`` remains raw editor play-state; use ``game_status.status`` for liveness decisions. ``game_status.status=\"break\"`` means the game process is parked in a remote-debugger break (boot-time parse errors do this before the game helper registers); it will not resume on its own — call ``project_manage(op=\"stop\")``.",
+     "guard": "editor_status",
+     "guard_op": "state",
+     "effect_key": "editor_state"
+    },
+    "open_scenes": {
+     "upstream": "scene_manage",
+     "op": "get_roots",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "open_scenes()",
+     "doc": "• get_roots() List scenes currently open in the editor; flag the edited one.",
+     "guard": "editor_status",
+     "guard_op": "open_scenes",
+     "effect_key": "scene_manage.get_roots"
+    },
+    "selection": {
+     "upstream": "editor_manage",
+     "op": "selection_get",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "selection()",
+     "doc": "• selection_get() Currently selected node paths in the editor.",
+     "guard": "editor_status",
+     "guard_op": "selection",
+     "effect_key": "editor_manage.selection_get"
+    },
+    "monitors": {
+     "upstream": "editor_manage",
+     "op": "monitors_get",
+     "keys": [
+      "monitors"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "monitors(monitors)",
+     "doc": "• monitors_get(monitors=None) Performance singleton values (FPS, memory, draw calls, etc.). Pass a list of monitor names to filter; None returns everything.",
+     "guard": "editor_status",
+     "guard_op": "monitors",
+     "effect_key": "editor_manage.monitors_get"
+    },
+    "sessions": {
+     "upstream": "session_manage",
+     "op": "list",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "sessions()",
+     "doc": "• list() List every connected Godot editor with metadata: session_id, short name, godot_version, project_path, plugin_version, server_version, editor_pid, server_launch_mode, current_scene, play_state, readiness, connected_at, last_seen, is_active. The response also carries the server-global ``exclude_domains`` (tool domains not registered on this server via --exclude-domains).",
+     "guard": "editor_status",
+     "guard_op": "sessions",
+     "effect_key": "session_manage.list"
+    },
+    "read_logs": {
+     "upstream": "logs_read",
+     "op": null,
+     "keys": [
+      "count",
+      "offset",
+      "source",
+      "since_run_id",
+      "since_cursor",
+      "include_details"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "read(count, offset, source, since_run_id, since_cursor, include_details)",
+     "doc": "Read recent log lines from the Godot editor, plugin, or running game. Resource form: ``godot://logs/recent`` — prefer for active-session reads. Sources: - \"plugin\" (default): MCP plugin recv/send/event traffic. Buffer 500. - \"game\": stdout/stderr/push_error/push_warning from playing game via ``_mcp_game_helper`` autoload. Buffer 2000, with lines retained across runs and tagged by run_id. Default reads return current-run lines only; pass ``since_run_id`` from an earlier response to read that prior run. Entries: {source, level, text, run_id}; response carries run_id, current_run_id, game_status, helper_live, session_active, dropped_count, stale_run_id. helper_live and session_active mirror the same fields inside game_status; is_running is retained as a compatibility alias of session_active. Boot-time parse/load errors fire before the game helper's logger attaches, so they are NEVER in this buffer; when editor-side errors were recorded during the current run the response adds ``editor_errors_count`` and ``editor_errors_hint`` pointing at source=\"editor\" — treat a clean game log carrying that hint as a run that lost scripts, not a clean launch. - \"editor\": editor-process script errors and the Debugger dock's visible Errors-tab rows — parse errors, GDScript reload warnings, @tool/EditorPlugin runtime errors, push_error/push_warning. Logger-backed entries and Errors-tab rows are read from the editor UI when available. Use when the editor Output or Debugger Errors panel shows red/yellow rows but other sources turned up nothing. Buffer 500 for logger-backed entries; Debugger rows are live UI state. Entries: {source, level, text, path, line, function}. Filtered to .gd/.cs in the user project for Logger-backed entries; addons/godot_ai/ dropped. Logger entries fired before plugin enable are not captured. - \"all\": plugin → editor → game lines (with source per entry). Tail pattern: for game logs, poll the current run with offset=N and keep the returned run_id. ``current_run_id`` identifies the active run; ``run_id`` identifies the run being read. Passing ``since_run_id=old_run_id`` reads retained lines for that prior run, and ``stale_run_id: true`` means the requested run is not the current run. For editor logs, read once to capture ``next_cursor`` and pass it back as ``since_cursor`` on later calls. ``since_cursor`` reads Logger-backed editor entries only; live Debugger Errors-tab rows are included in regular source=\"editor\" reads but do not have stable cursors. When ``since_cursor`` is set, it supersedes ``offset``. ``truncated: true`` means older entries fell out of the ring before the poll; continue from the returned ``next_cursor`` and treat ``oldest_cursor`` as the earliest retained sequence. Set ``include_details=True`` for Errors-tab style metadata on game/editor entries: original code/rationale, error type, resolved source, and stack frames. Default false preserves compact responses.",
+     "guard": "read_logs",
+     "guard_op": "read",
+     "effect_key": "logs_read"
+    },
+    "class": {
+     "upstream": "api_manage",
+     "op": "get_class",
+     "keys": [
+      "class_name",
+      "sections",
+      "include_inherited",
+      "include_inheritors",
+      "offset",
+      "limit"
+     ],
+     "any_keys": false,
+     "required": [
+      "class_name"
+     ],
+     "sig": "class(class_name*, sections, include_inherited, include_inheritors, offset, limit)",
+     "doc": "- get_class(class_name, sections=None, include_inherited=False, include_inheritors=False, offset=0, limit=100) Return selected class-reference sections without creating a scene instance. sections may be a comma-separated string or list containing properties, methods, signals, enums, constants, inheritors. Defaults to [\"properties\"] only — a bare get_class answers \"what properties does X have\" without the multi-thousand-token full dump. Pass the sections you want by name, or \"all\" for the full set (properties, methods, signals, enums, constants). \"all\" does NOT include the heavier \"inheritors\" section — request that by name. For pagination, request one section at a time so offset/limit apply only to the list you are paging.",
+     "guard": "class_reference",
+     "guard_op": "class",
+     "effect_key": "api_manage.get_class"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "state",
+      "open_scenes",
+      "selection",
+      "monitors",
+      "sessions",
+      "read_logs",
+      "class"
+     ],
+     "description": "Operation. One of: state, open_scenes, selection, monitors, sessions, read_logs, class."
+    },
+    "monitors": {
+     "description": "Used by: monitors."
+    },
+    "count": {
+     "default": 50,
+     "type": "integer",
+     "description": "Max lines to return. Default 50."
+    },
+    "offset": {
+     "default": 0,
+     "type": "integer",
+     "description": "Lines to skip. Default 0."
+    },
+    "source": {
+     "default": "plugin",
+     "type": "string",
+     "description": "\"plugin\" | \"game\" | \"editor\" | \"all\". Default \"plugin\"."
+    },
+    "since_run_id": {
+     "default": "",
+     "type": "string",
+     "description": "Game-log run id from a previous response; reads that\nretained run instead of the current run."
+    },
+    "since_cursor": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Editor-log cursor from a previous source=\"editor\" response."
+    },
+    "include_details": {
+     "default": false,
+     "type": "boolean",
+     "description": "Include rich error metadata for game/editor entries."
+    },
+    "class_name": {
+     "description": "Used by: class."
+    },
+    "sections": {
+     "description": "Used by: class."
+    },
+    "include_inherited": {
+     "description": "Used by: class."
+    },
+    "include_inheritors": {
+     "description": "Used by: class."
+    },
+    "limit": {
+     "description": "Used by: class, shader_nodes."
+    },
+    "type": {
+     "description": "Used by: resource_type."
+    },
+    "filter": {
+     "description": "Used by: shader_nodes."
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "editor_do",
+   "tier": "destructive",
+   "description": "Quit, reload, select or screenshot in the Godot editor. Asks the user for approval every time. Ops: screenshot, resource_type, shader_nodes, quit, clear_logs, select, reload_plugin, activate_session.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "screenshot": {
+     "upstream": "editor_screenshot",
+     "op": null,
+     "keys": [
+      "source",
+      "max_resolution",
+      "include_image",
+      "view_target",
+      "coverage",
+      "elevation",
+      "azimuth",
+      "fov",
+      "user_prompt"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "capture(source, max_resolution, include_image, view_target, coverage, elevation, azimuth, fov, user_prompt)",
+     "doc": "Capture a screenshot of the Godot editor viewport or running game. Picking a source: the default ``\"viewport\"`` captures the editor's 3D viewport, which is empty if the edited scene has no Node3D anywhere in the tree (or no scene is open). Those cases return ``EDITOR_NOT_READY`` with ``error.data = {editor_state: \"viewport_not_3d\", scene_root_type}`` and an actionable ``error.message`` — switch to ``\"cinematic\"`` if the scene has a Camera3D, or open a scene with 3D content. Sources: - \"viewport\" (default): editor 3D viewport. Requires Node3D content in the edited scene (root or any descendant); see above for the no-3D-content / no-scene error shape. - \"viewport_2d\": editor 2D viewport. Use for 2D scenes. Not compatible with view_target/coverage/elevation/azimuth/fov. - \"cinematic\": render edited scene through its active Camera3D (no editor gizmos). Prefers a Camera3D marked ``current``; falls back to the first Camera3D found in a depth-first walk. NODE_NOT_FOUND only when the scene contains no Camera3D at all. - \"game\": running game's framebuffer (only when project is running). A backgrounded/minimized game window freezes its main loop; the capture then returns the last rendered frame with ``stale_frame: true`` and a ``note`` in the metadata — focus the game window and retry for a current frame. ``GAME_HELPER_TIMEOUT`` means the game process never replied at all (nothing rendered yet, main thread blocked, or helper dead) — focus the window and retry, or use game_command to confirm liveness. ``include_image=True`` (default) returns an MCP ImageContent block. ``view_target`` (comma-separated Node3D paths) reframes editor camera; AABB metadata always returned. ``coverage=True`` with view_target captures perspective + orthographic top-down references.",
+     "guard": "screenshot",
+     "guard_op": "capture",
+     "effect_key": "editor_screenshot"
+    },
+    "resource_type": {
+     "upstream": "resource_manage",
+     "op": "get_info",
+     "keys": [
+      "type"
+     ],
+     "any_keys": false,
+     "required": [
+      "type"
+     ],
+     "sig": "resource_type(type*)",
+     "doc": "• get_info(type) Introspect a Resource class — properties, parent, abstract flag, concrete_subclasses (for abstract bases). Read-only.",
+     "guard": "class_reference",
+     "guard_op": "resource_type",
+     "effect_key": "resource_manage.get_info"
+    },
+    "shader_nodes": {
+     "upstream": "material_manage",
+     "op": "visual_shader_node_catalog",
+     "keys": [
+      "filter",
+      "offset",
+      "limit"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "shader_nodes(filter, offset, limit)",
+     "doc": "• visual_shader_node_catalog(filter=\"\", offset=0, limit=100) List instantiable VisualShaderNode classes with the properties this tool accepts, plus legacy aliases. Discover valid node types and params before authoring a graph.",
+     "guard": "class_reference",
+     "guard_op": "shader_nodes",
+     "effect_key": "material_manage.visual_shader_node_catalog"
+    },
+    "quit": {
+     "upstream": "editor_manage",
+     "op": "quit",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "quit()",
+     "doc": "• quit() Gracefully quit the Godot editor on next frame.",
+     "guard": "editor_control",
+     "guard_op": "quit",
+     "effect_key": "editor_manage.quit"
+    },
+    "clear_logs": {
+     "upstream": "editor_manage",
+     "op": "logs_clear",
+     "keys": [
+      "clear_debugger_errors"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "clear_logs(clear_debugger_errors)",
+     "doc": "• logs_clear(clear_debugger_errors=False) Clear the MCP log buffer. Returns cleared_count. Pass clear_debugger_errors=True to also clear the Debugger dock's visible Errors-tab rows (user-facing UI, so opt-in only); the response then includes debugger_errors_cleared.",
+     "guard": "editor_control",
+     "guard_op": "clear_logs",
+     "effect_key": "editor_manage.logs_clear"
+    },
+    "select": {
+     "upstream": "editor_manage",
+     "op": "selection_set",
+     "keys": [
+      "paths"
+     ],
+     "any_keys": false,
+     "required": [
+      "paths"
+     ],
+     "sig": "select(paths*)",
+     "doc": "• selection_set(paths) Replace the selection with the given list of scene paths.",
+     "guard": "editor_control",
+     "guard_op": "select",
+     "effect_key": "editor_manage.selection_set"
+    },
+    "reload_plugin": {
+     "upstream": "editor_reload_plugin",
+     "op": null,
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "reload_plugin()",
+     "doc": "Reload the Godot editor plugin. Disables and re-enables the plugin on the next frame. The response shape depends on whether this MCP server was spawned by the plugin or launched externally: - **Plugin-managed (default install)**: returns a pre-flight ack ``{status: \"reload_initiated\", transport_will_drop: true, old_session_id, guidance}`` immediately. The reload kills this server, so the WebSocket transport drops; reconnect and call ``session_manage(op=\"list\")`` to find the new session_id. - **Externally launched** (e.g. ``python -m godot_ai --transport streamable-http --port 8000 --reload``): waits for the new session to register and returns ``{status: \"reloaded\", old_session_id, new_session_id}``. If the old bridge disappears and no replacement registers within 90 seconds, raises ``PLUGIN_DISCONNECTED`` with ``data.reason == \"reload_timeout\"`` and recovery diagnostics.",
+     "guard": "editor_control",
+     "guard_op": "reload_plugin",
+     "effect_key": "editor_reload_plugin"
+    },
+    "activate_session": {
+     "upstream": "session_activate",
+     "op": null,
+     "keys": [
+      "session_id"
+     ],
+     "any_keys": false,
+     "required": [
+      "session_id"
+     ],
+     "sig": "activate_session(session_id*)",
+     "doc": "Set the active Godot editor session for subsequent tool calls. Accepts either an exact session_id or a substring hint matched against the session's short name (project folder basename), project_path, or session_id. An exact id match always wins; a substring must resolve to exactly one session or the tool returns an error listing the candidates.",
+     "guard": "editor_control",
+     "guard_op": "activate_session",
+     "effect_key": "session_activate"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "screenshot",
+      "resource_type",
+      "shader_nodes",
+      "quit",
+      "clear_logs",
+      "select",
+      "reload_plugin",
+      "activate_session"
+     ],
+     "description": "Operation. One of: screenshot, resource_type, shader_nodes, quit, clear_logs, select, reload_plugin, activate_session."
+    },
+    "source": {
+     "default": "viewport",
+     "type": "string",
+     "description": "\"viewport\" | \"viewport_2d\" | \"cinematic\" | \"game\". Default \"viewport\"."
+    },
+    "max_resolution": {
+     "default": 640,
+     "type": "integer",
+     "description": "Longest-edge resolution. Default 640. 0 = full res."
+    },
+    "include_image": {
+     "default": true,
+     "type": "boolean",
+     "description": "Return image data. Default True."
+    },
+    "view_target": {
+     "default": "",
+     "type": "string",
+     "description": "Node3D scene path(s) to frame, comma-separated."
+    },
+    "coverage": {
+     "default": false,
+     "type": "boolean",
+     "description": "With view_target, capture two reference shots + AABB."
+    },
+    "elevation": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Camera elevation in degrees (0=level, 90=overhead)."
+    },
+    "azimuth": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Camera azimuth in degrees (0=front, 90=right)."
+    },
+    "fov": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Camera FOV in degrees. Tight 20-30 = zoom; 60-75 = context."
+    },
+    "user_prompt": {
+     "default": "",
+     "type": "string",
+     "description": "Optional context from the agent that requested the\ncapture. With Vision Routing enabled it is sent alongside the\nimage so the vision model can describe what the agent is\nlooking for."
+    },
+    "class_name": {
+     "description": "Used by: class."
+    },
+    "sections": {
+     "description": "Used by: class."
+    },
+    "include_inherited": {
+     "description": "Used by: class."
+    },
+    "include_inheritors": {
+     "description": "Used by: class."
+    },
+    "offset": {
+     "description": "Used by: class, shader_nodes."
+    },
+    "limit": {
+     "description": "Used by: class, shader_nodes."
+    },
+    "type": {
+     "description": "Used by: resource_type."
+    },
+    "filter": {
+     "description": "Used by: shader_nodes."
+    },
+    "clear_debugger_errors": {
+     "description": "Used by: clear_logs."
+    },
+    "paths": {
+     "description": "Used by: select."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "scene_look",
+   "tier": "read",
+   "description": "Godot scene tree, node search and node children. Does not change the project. Ops: scene_tree, find_nodes, children, groups, signals. properties and resource run scripts, so they are not on this tool.",
+   "default_op": "scene_tree",
+   "multi": true,
+   "ops": {
+    "scene_tree": {
+     "upstream": "scene_get_hierarchy",
+     "op": null,
+     "keys": [
+      "depth",
+      "offset",
+      "limit"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "tree(depth, offset, limit)",
+     "doc": "Get the scene tree hierarchy from the open scene. Returns a paginated flat list of nodes with name, type, path, and child count. Walks up to the specified depth. Resource form: ``godot://scene/hierarchy`` — prefer for active-session reads.",
+     "guard": "scene_tree",
+     "guard_op": "tree",
+     "effect_key": "scene_get_hierarchy"
+    },
+    "find_nodes": {
+     "upstream": "node_find",
+     "op": null,
+     "keys": [
+      "name",
+      "type",
+      "group",
+      "offset",
+      "limit"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "find(name, type, group, offset, limit)",
+     "doc": "Find nodes in the scene tree by name, type, or group. At least one filter must be provided. Filters AND together. Paginated.",
+     "guard": "find_nodes",
+     "guard_op": "find",
+     "effect_key": "node_find"
+    },
+    "properties": {
+     "upstream": "node_get_properties",
+     "op": null,
+     "keys": [
+      "path",
+      "fields"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "properties(path*, fields)",
+     "doc": "Get properties of a node. Resource form: ``godot://node/{path}/properties`` — prefer for active-session reads (returns the full property set). The default returns every editor-visible property, which can be 50-150 entries. Pass ``fields`` to return only the properties you need — a large response-size cut on this hot read. The response always carries ``total_count`` (all editor-visible properties) alongside ``count`` (returned): an unfiltered call returns the full set, so ``count == total_count``; only the ``fields`` filter can make ``count`` smaller. Requested names that match no editor-visible property are listed in ``unknown_fields``, so a nonexistent name is distinguishable from a property that exists with a null value. Null-valued properties are included: an unset object/resource slot (``script`` on an unscripted node, an empty ``mesh`` or ``material``, …) returns ``\"value\": null`` with its declared type. An attached script serializes to its ``res://`` path; built-in scripts (no resource path) fall back to their string representation.",
+     "guard": "node_properties",
+     "guard_op": "properties",
+     "effect_key": "node_get_properties"
+    },
+    "children": {
+     "upstream": "node_manage",
+     "op": "get_children",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "children(path*)",
+     "doc": "• get_children(path) Direct children of a node (name, type, path each).",
+     "guard": "node_properties",
+     "guard_op": "children",
+     "effect_key": "node_manage.get_children"
+    },
+    "groups": {
+     "upstream": "node_manage",
+     "op": "get_groups",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "groups(path*)",
+     "doc": "• get_groups(path) Group names the node belongs to.",
+     "guard": "node_properties",
+     "guard_op": "groups",
+     "effect_key": "node_manage.get_groups"
+    },
+    "signals": {
+     "upstream": "signal_manage",
+     "op": "list",
+     "keys": [
+      "path",
+      "include_editor"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "signals(path*, include_editor)",
+     "doc": "• list(path, include_editor=False) List all signals on the node and their current connections (built-in and custom). By default editor-internal connections (the SceneTreeEditor dock and friends) are filtered out — pass ``include_editor=True`` to surface them. The response carries ``editor_connection_count`` so an agent can tell how many were hidden.",
+     "guard": "node_properties",
+     "guard_op": "signals",
+     "effect_key": "signal_manage.list"
+    },
+    "resource": {
+     "upstream": "resource_manage",
+     "op": "inspect",
+     "keys": [
+      "node_path",
+      "property",
+      "depth"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path",
+      "property"
+     ],
+     "sig": "resource(node_path*, property*, depth)",
+     "doc": "• inspect(node_path, property, depth=2) Read a live native resource graph without loading or modifying files. Depth 0..3; shared references, omission reasons, fixed traversal and 64 KiB encoded-result limits. Scripted/dynamic properties excluded.",
+     "guard": "node_properties",
+     "guard_op": "resource",
+     "effect_key": "resource_manage.inspect"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "scene_tree",
+      "find_nodes",
+      "properties",
+      "children",
+      "groups",
+      "signals",
+      "resource"
+     ],
+     "description": "Operation. One of: scene_tree, find_nodes, children, groups, signals. properties and resource run scripts and are not listed."
+    },
+    "depth": {
+     "default": 10,
+     "type": "integer",
+     "description": "Maximum walk depth. Default 10."
+    },
+    "offset": {
+     "default": 0,
+     "type": "integer",
+     "description": "Number of nodes to skip. Default 0."
+    },
+    "limit": {
+     "default": 100,
+     "type": "integer",
+     "description": "Max number of nodes to return. Default 100."
+    },
+    "name": {
+     "default": "",
+     "type": "string",
+     "description": "Substring match on node name (case-insensitive)."
+    },
+    "type": {
+     "default": "",
+     "type": "string",
+     "description": "Exact Godot class name (e.g. \"MeshInstance3D\")."
+    },
+    "group": {
+     "default": "",
+     "type": "string",
+     "description": "Group name the node must belong to."
+    },
+    "path": {
+     "description": "Used by: properties, children, groups, signals."
+    },
+    "fields": {
+     "description": "Used by: properties."
+    },
+    "include_editor": {
+     "description": "Used by: signals."
+    },
+    "node_path": {
+     "description": "Used by: resource."
+    },
+    "property": {
+     "description": "Used by: resource."
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "scene_do",
+   "tier": "destructive",
+   "description": "Edit the open Godot scene: nodes, signals and save. Asks the user for approval every time. Ops: properties, children, groups, signals, resource, open_scene, add_node, set_node_property, rename, move, reparent, duplicate, add_to_group, remove_from_group, attach_script, detach_script, delete_node, save, save_as, new_scene, revert_scene, connect, disconnect.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "properties": {
+     "upstream": "node_get_properties",
+     "op": null,
+     "keys": [
+      "path",
+      "fields"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "properties(path*, fields)",
+     "doc": "Get properties of a node. Resource form: ``godot://node/{path}/properties`` — prefer for active-session reads (returns the full property set). The default returns every editor-visible property, which can be 50-150 entries. Pass ``fields`` to return only the properties you need — a large response-size cut on this hot read. The response always carries ``total_count`` (all editor-visible properties) alongside ``count`` (returned): an unfiltered call returns the full set, so ``count == total_count``; only the ``fields`` filter can make ``count`` smaller. Requested names that match no editor-visible property are listed in ``unknown_fields``, so a nonexistent name is distinguishable from a property that exists with a null value. Null-valued properties are included: an unset object/resource slot (``script`` on an unscripted node, an empty ``mesh`` or ``material``, …) returns ``\"value\": null`` with its declared type. An attached script serializes to its ``res://`` path; built-in scripts (no resource path) fall back to their string representation.",
+     "guard": "inspect_node",
+     "guard_op": "properties",
+     "effect_key": "node_get_properties",
+     "elicit": true
+    },
+    "children": {
+     "upstream": "node_manage",
+     "op": "get_children",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "children(path*)",
+     "doc": "• get_children(path) Direct children of a node (name, type, path each).",
+     "guard": "inspect_node",
+     "guard_op": "children",
+     "effect_key": "node_manage.get_children",
+     "elicit": true
+    },
+    "groups": {
+     "upstream": "node_manage",
+     "op": "get_groups",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "groups(path*)",
+     "doc": "• get_groups(path) Group names the node belongs to.",
+     "guard": "inspect_node",
+     "guard_op": "groups",
+     "effect_key": "node_manage.get_groups",
+     "elicit": true
+    },
+    "signals": {
+     "upstream": "signal_manage",
+     "op": "list",
+     "keys": [
+      "path",
+      "include_editor"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "signals(path*, include_editor)",
+     "doc": "• list(path, include_editor=False) List all signals on the node and their current connections (built-in and custom). By default editor-internal connections (the SceneTreeEditor dock and friends) are filtered out — pass ``include_editor=True`` to surface them. The response carries ``editor_connection_count`` so an agent can tell how many were hidden.",
+     "guard": "inspect_node",
+     "guard_op": "signals",
+     "effect_key": "signal_manage.list",
+     "elicit": true
+    },
+    "resource": {
+     "upstream": "resource_manage",
+     "op": "inspect",
+     "keys": [
+      "node_path",
+      "property",
+      "depth"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path",
+      "property"
+     ],
+     "sig": "resource(node_path*, property*, depth)",
+     "doc": "• inspect(node_path, property, depth=2) Read a live native resource graph without loading or modifying files. Depth 0..3; shared references, omission reasons, fixed traversal and 64 KiB encoded-result limits. Scripted/dynamic properties excluded.",
+     "guard": "inspect_node",
+     "guard_op": "resource",
+     "effect_key": "resource_manage.inspect",
+     "elicit": true
+    },
+    "open_scene": {
+     "upstream": "scene_open",
+     "op": null,
+     "keys": [
+      "path",
+      "force_reload"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "open(path*)",
+     "doc": "Open an existing scene file (.tscn) in the editor. If ``path`` is already the currently edited scene this is a no-op — the in-memory state (including any unsaved MCP mutations) is preserved. Pass ``force_reload=True`` when the file on disk is the authority and the editor should discard the open in-memory copy and re-read the scene from disk. The reply is sent only after the editor has actually switched to the requested scene (``switched: true``), so follow-up writes are safe immediately. ``switched: false`` with ``settle: \"timeout\"`` means the switch had not landed within the wait window. In synchronous contexts (e.g. inside ``batch_execute``) the reply returns immediately with ``switched: false`` and ``settle: \"not_waited\"``. In both of those cases, re-check ``editor_state`` before issuing follow-up writes.",
+     "guard": "open_scene",
+     "guard_op": "open",
+     "effect_key": "scene_open"
+    },
+    "add_node": {
+     "upstream": "node_create",
+     "op": null,
+     "keys": [
+      "type",
+      "name",
+      "parent_path",
+      "scene_path",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "add(type, name, parent_path, scene_path, scene_file)",
+     "doc": "Create (spawn) a new node in the scene tree. Creates a node of the given type and adds it to the parent, or instantiates a PackedScene from ``scene_path``. type and scene_path are mutually exclusive — when scene_path is given, type is ignored.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "add_node",
+     "guard_op": "add",
+     "effect_key": "node_create"
+    },
+    "set_node_property": {
+     "upstream": "node_set_property",
+     "op": null,
+     "keys": [
+      "path",
+      "property",
+      "value",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "property",
+      "value"
+     ],
+     "sig": "set(path*, property*, value*, scene_file)",
+     "doc": "Set a property on a node. Verify the property name first — call ``node_get_properties`` (or read ``godot://node/{path}/properties``) to confirm the exact name and type before writing. Guessing common Godot names often fails with PROPERTY_NOT_ON_CLASS because Godot's actual properties differ from intuition (e.g. ``Camera3D`` uses ``fov``/``current``, not ``field_of_view``; ``Sprite2D`` uses ``texture``, not ``image``; ``Node3D`` uses ``position``/``rotation``/``scale``, not ``transform.origin``). Coerces ``value`` to the property's type: - Vector2/Vector3: dict with x/y/z keys. - Color: dict {r,g,b,a} or hex string (\"#ff0000\"). - NodePath: string (\"../Other/Node\"). - Node-typed export (``@export var target: Node2D``): node path string, either a scene path (\"/Main/Player\") or relative to the node (\"../Player\"); the node's class is checked against the export's type, and the response reports the scene path. null/\"\" clears. - Resource: res:// path string (loads + assigns); null/\"\" clears. ``{\"__class__\": \"BoxMesh\", ...}`` creates a built-in resource owned by this property. After scene_save it is serialized in-place as a ``[sub_resource]`` inside the .tscn; it is not a reusable .tres. For sharing, first call ``resource_manage(op=\"create\", params={\"type\": \"BoxMesh\", \"properties\": {...}, \"resource_path\": \"res://meshes/box.tres\"})``, then pass that res:// path here (or use resource_manage(op=\"assign\")). - StringName: plain string. Array/Dictionary: JSON list/object.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "set_node_property",
+     "guard_op": "set",
+     "effect_key": "node_set_property"
+    },
+    "rename": {
+     "upstream": "node_manage",
+     "op": "rename",
+     "keys": [
+      "path",
+      "new_name",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "new_name"
+     ],
+     "sig": "rename(path*, new_name*, scene_file)",
+     "doc": "• rename(path, new_name, scene_file=\"\") Rename a node. Sibling-name collision and \"/\" / \":\" / \"@\" rules apply.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_node",
+     "guard_op": "rename",
+     "effect_key": "node_manage.rename"
+    },
+    "move": {
+     "upstream": "node_manage",
+     "op": "move",
+     "keys": [
+      "path",
+      "index",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "index"
+     ],
+     "sig": "move(path*, index*, scene_file)",
+     "doc": "• move(path, index, scene_file=\"\") Reorder among siblings. Index 0 = first.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_node",
+     "guard_op": "move",
+     "effect_key": "node_manage.move"
+    },
+    "reparent": {
+     "upstream": "node_manage",
+     "op": "reparent",
+     "keys": [
+      "path",
+      "new_parent",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "new_parent"
+     ],
+     "sig": "reparent(path*, new_parent*, scene_file)",
+     "doc": "• reparent(path, new_parent, scene_file=\"\") Move under a new parent. Children preserved. Cannot move into descendants.",
+     "node_keys": [
+      "path",
+      "new_parent"
+     ],
+     "guard": "edit_node",
+     "guard_op": "reparent",
+     "effect_key": "node_manage.reparent"
+    },
+    "duplicate": {
+     "upstream": "node_manage",
+     "op": "duplicate",
+     "keys": [
+      "path",
+      "name",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "duplicate(path*, name, scene_file)",
+     "doc": "• duplicate(path, name=\"\", scene_file=\"\") Deep-copy a node + children as a sibling. Cannot duplicate scene root.",
+     "guard": "edit_node",
+     "guard_op": "duplicate",
+     "effect_key": "node_manage.duplicate"
+    },
+    "add_to_group": {
+     "upstream": "node_manage",
+     "op": "add_to_group",
+     "keys": [
+      "path",
+      "group",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "group"
+     ],
+     "sig": "add_to_group(path*, group*, scene_file)",
+     "doc": "• add_to_group(path, group, scene_file=\"\") Add the node to a group.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_node",
+     "guard_op": "add_to_group",
+     "effect_key": "node_manage.add_to_group"
+    },
+    "remove_from_group": {
+     "upstream": "node_manage",
+     "op": "remove_from_group",
+     "keys": [
+      "path",
+      "group",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "group"
+     ],
+     "sig": "remove_from_group(path*, group*, scene_file)",
+     "doc": "• remove_from_group(path, group, scene_file=\"\") Remove the node from a group.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_node",
+     "guard_op": "remove_from_group",
+     "effect_key": "node_manage.remove_from_group"
+    },
+    "attach_script": {
+     "upstream": "script_attach",
+     "op": null,
+     "keys": [
+      "path",
+      "script_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "script_path"
+     ],
+     "sig": "attach_script(path*, script_path*)",
+     "doc": "Attach a script to a node in the scene tree. Replaces any existing script on the node. Undoable.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_node",
+     "guard_op": "attach_script",
+     "effect_key": "script_attach"
+    },
+    "detach_script": {
+     "upstream": "script_manage",
+     "op": "detach",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "detach_script(path*)",
+     "doc": "• detach(path) Remove the currently attached script from a node. Undoable.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_node",
+     "guard_op": "detach_script",
+     "effect_key": "script_manage.detach"
+    },
+    "delete_node": {
+     "upstream": "node_manage",
+     "op": "delete",
+     "keys": [
+      "path",
+      "scene_file"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "delete(path*, scene_file)",
+     "doc": "• delete(path, scene_file=\"\") Remove the node. Cannot delete scene root. Undoable.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "delete_node",
+     "guard_op": "delete",
+     "effect_key": "node_manage.delete"
+    },
+    "save": {
+     "upstream": "scene_save",
+     "op": null,
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "save()",
+     "doc": "Save the currently edited scene to disk. Node and property mutation tools change the editor's in-memory scene; call this explicitly to persist those mutations to the existing path.",
+     "guard": "save_scene",
+     "guard_op": "save",
+     "effect_key": "scene_save"
+    },
+    "save_as": {
+     "upstream": "scene_manage",
+     "op": "save_as",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "save_as(path*)",
+     "doc": "• save_as(path) Save the currently edited scene to a new file path.",
+     "file_create": [
+      "path"
+     ],
+     "guard": "save_scene",
+     "guard_op": "save_as",
+     "effect_key": "scene_manage.save_as"
+    },
+    "new_scene": {
+     "upstream": "scene_manage",
+     "op": "create",
+     "keys": [
+      "path",
+      "root_type",
+      "root_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "create(path*, root_type, root_name)",
+     "doc": "• create(path, root_type=\"Node3D\", root_name=\"\") Create the initial .tscn with the given root and open it. root_name defaults to filename basename when empty. This initial root is written immediately, but later node_create/node_set_property mutations remain in editor memory until scene_save or save_as is called.",
+     "file_create": [
+      "path"
+     ],
+     "guard": "new_scene",
+     "guard_op": "create",
+     "effect_key": "scene_manage.create"
+    },
+    "revert_scene": {
+     "upstream": "scene_open",
+     "op": null,
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "revert(path)",
+     "fixed": {
+      "force_reload": true
+     },
+     "doc": "Open an existing scene file (.tscn) in the editor. If ``path`` is already the currently edited scene this is a no-op — the in-memory state (including any unsaved MCP mutations) is preserved. Pass ``force_reload=True`` when the file on disk is the authority and the editor should discard the open in-memory copy and re-read the scene from disk. The reply is sent only after the editor has actually switched to the requested scene (``switched: true``), so follow-up writes are safe immediately. ``switched: false`` with ``settle: \"timeout\"`` means the switch had not landed within the wait window. In synchronous contexts (e.g. inside ``batch_execute``) the reply returns immediately with ``switched: false`` and ``settle: \"not_waited\"``. In both of those cases, re-check ``editor_state`` before issuing follow-up writes.",
+     "guard": "revert_scene",
+     "guard_op": "revert",
+     "effect_key": "scene_open"
+    },
+    "connect": {
+     "upstream": "signal_manage",
+     "op": "connect",
+     "keys": [
+      "path",
+      "signal",
+      "target",
+      "method"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "signal",
+      "target",
+      "method"
+     ],
+     "sig": "connect(path*, signal*, target*, method*)",
+     "doc": "• connect(path, signal, target, method) Connect a signal from ``path`` to a method on the target node. Undoable.",
+     "guard": "connect_signal",
+     "guard_op": "connect",
+     "effect_key": "signal_manage.connect"
+    },
+    "disconnect": {
+     "upstream": "signal_manage",
+     "op": "disconnect",
+     "keys": [
+      "path",
+      "signal",
+      "target",
+      "method"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "signal",
+      "target",
+      "method"
+     ],
+     "sig": "disconnect(path*, signal*, target*, method*)",
+     "doc": "• disconnect(path, signal, target, method) Remove an existing connection. Undoable.",
+     "guard": "connect_signal",
+     "guard_op": "disconnect",
+     "effect_key": "signal_manage.disconnect"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "properties",
+      "children",
+      "groups",
+      "signals",
+      "resource",
+      "open_scene",
+      "add_node",
+      "set_node_property",
+      "rename",
+      "move",
+      "reparent",
+      "duplicate",
+      "add_to_group",
+      "remove_from_group",
+      "attach_script",
+      "detach_script",
+      "delete_node",
+      "save",
+      "save_as",
+      "new_scene",
+      "revert_scene",
+      "connect",
+      "disconnect"
+     ],
+     "description": "Operation. One of: properties, children, groups, signals, resource, open_scene, add_node, set_node_property, rename, move, reparent, duplicate, add_to_group, remove_from_group, attach_script, detach_script, delete_node, save, save_as, new_scene, revert_scene, connect, disconnect."
+    },
+    "path": {
+     "description": "Used by: properties, children, groups, signals."
+    },
+    "fields": {
+     "description": "Used by: properties."
+    },
+    "include_editor": {
+     "description": "Used by: signals."
+    },
+    "node_path": {
+     "description": "Used by: resource."
+    },
+    "property": {
+     "description": "Used by: resource."
+    },
+    "depth": {
+     "description": "Used by: resource."
+    },
+    "force_reload": {
+     "type": "boolean",
+     "default": false,
+     "description": "true discards unsaved edits and reads the file from disk. false keeps the open copy. revert_scene is the approval whose name says the discard."
+    },
+    "type": {
+     "default": "",
+     "type": "string",
+     "description": "Godot node class (e.g. \"Node3D\", \"MeshInstance3D\")."
+    },
+    "name": {
+     "default": "",
+     "type": "string",
+     "description": "Optional name; Godot auto-names if empty."
+    },
+    "parent_path": {
+     "default": "",
+     "type": "string",
+     "description": "Parent path relative to the edited scene root (e.g.\n\"/Main\"), NOT runtime \"/root/...\". Empty = scene root."
+    },
+    "scene_path": {
+     "default": "",
+     "type": "string",
+     "description": "Optional res:// path of a PackedScene to instantiate."
+    },
+    "scene_file": {
+     "default": "",
+     "type": "string",
+     "description": "Optional editor-scene guard (EDITED_SCENE_MISMATCH)."
+    },
+    "value": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "integer"
+      },
+      {
+       "type": "number"
+      },
+      {
+       "type": "boolean"
+      },
+      {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      {
+       "items": {},
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "New value. Pass null (or \"\" for resources) to clear."
+    },
+    "new_name": {
+     "description": "Used by: rename."
+    },
+    "index": {
+     "description": "Used by: move."
+    },
+    "new_parent": {
+     "description": "Used by: reparent."
+    },
+    "group": {
+     "description": "Used by: add_to_group, remove_from_group."
+    },
+    "script_path": {
+     "description": "Used by: attach_script."
+    },
+    "overwrite": {
+     "type": "boolean",
+     "description": "Replace an existing file. Default false."
+    },
+    "root_type": {
+     "description": ""
+    },
+    "root_name": {
+     "description": ""
+    },
+    "signal": {
+     "description": "Used by: connect, disconnect."
+    },
+    "target": {
+     "description": "Used by: connect, disconnect."
+    },
+    "method": {
+     "description": "Used by: connect, disconnect."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "script_look",
+   "tier": "read",
+   "description": "Read a Godot GDScript file and its outline. Does not change the project. Ops: source, outline.",
+   "default_op": "source",
+   "multi": true,
+   "ops": {
+    "source": {
+     "upstream": "script_manage",
+     "op": "read",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "source(path*)",
+     "doc": "• read(path) Read full source, line count, file size.",
+     "guard": "read_script",
+     "guard_op": "source",
+     "effect_key": "script_manage.read"
+    },
+    "outline": {
+     "upstream": "script_manage",
+     "op": "find_symbols",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "outline(path*)",
+     "doc": "• find_symbols(path) Outline a script. .gd: class_name, extends, functions, signals, @export vars. .cs: class, base type, methods, [Signal] delegates, [Export] members. Response ``language`` says which parser ran.",
+     "guard": "read_script",
+     "guard_op": "outline",
+     "effect_key": "script_manage.find_symbols"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "source",
+      "outline"
+     ],
+     "description": "Operation. One of: source, outline."
+    },
+    "path": {
+     "description": "Used by: source, outline."
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "script_do",
+   "tier": "destructive",
+   "description": "Write or patch a Godot GDScript or shader file. Asks the user for approval every time. Ops: create_script, script, shader.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "create_script": {
+     "upstream": "script_create",
+     "op": null,
+     "keys": [
+      "path",
+      "content"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "create(path*, content)",
+     "doc": "Create a script file on disk: GDScript (.gd, validated) or C# (.cs, text only). Writes content to the path. Overwrites if it exists. Registers the file with the editor. New files include ``data.cleanup.rm`` listing the file and, when supported by the editor, its ``.uid`` sidecar; overwrite omits it. .gd: source is parse-validated and the response carries ``diagnostics`` (``diagnostics_status=\"checked\"``); an already-loaded script is refreshed in place. .cs: written as text only — Godot AI does not compile .NET, so ``diagnostics_status=\"not_checked\"`` and ``validation_hint`` says to build the project (editor Build button or ``dotnet build``) to see compiler errors. ``dotnet_editor`` reports whether the connected editor build has .NET at all. Any other extension is rejected; use filesystem_manage op=\"write_text\".",
+     "file_create": [
+      "path"
+     ],
+     "guard": "create_script",
+     "guard_op": "create",
+     "effect_key": "script_create"
+    },
+    "script": {
+     "upstream": "script_patch",
+     "op": null,
+     "keys": [
+      "path",
+      "old_text",
+      "new_text",
+      "replace_all"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "old_text",
+      "new_text"
+     ],
+     "sig": "script(path*, old_text*, new_text*, replace_all)",
+     "doc": "Anchor-based string-replace edit on a .gd or .cs file. Finds an exact ``old_text`` and replaces with ``new_text``. Fails on multiple matches unless ``replace_all=True``; fails on zero matches. Exact byte match (whitespace significant). Triggers filesystem scan. .gd: parse-validated (``diagnostics``) and an already-loaded GDScript is refreshed in place so the next call runs the new code (response reloaded=true; otherwise reload_reason says why). .cs: text only — ``diagnostics_status=\"not_checked\"``, ``reload_reason= \"csharp_requires_build\"``; rebuild the .NET assembly to run it. Not undoable via Ctrl+Z.",
+     "guard": "edit_script",
+     "guard_op": "script",
+     "effect_key": "script_patch"
+    },
+    "shader": {
+     "upstream": "material_manage",
+     "op": "shader_patch",
+     "keys": [
+      "path",
+      "old_text",
+      "new_text",
+      "replace_all",
+      "shader_type"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "old_text",
+      "new_text"
+     ],
+     "sig": "shader(path*, old_text*, new_text*, replace_all, shader_type)",
+     "doc": "• shader_patch(path, old_text, new_text, replace_all=False) Anchor-based edit of a shader file: exact substring match, result revalidated before the file is replaced. Not undoable.",
+     "guard": "edit_script",
+     "guard_op": "shader",
+     "effect_key": "material_manage.shader_patch"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "create_script",
+      "script",
+      "shader"
+     ],
+     "description": "Operation. One of: create_script, script, shader."
+    },
+    "path": {
+     "type": "string",
+     "description": "res:// path ending in .gd or .cs (e.g. \"res://scripts/player.gd\")."
+    },
+    "content": {
+     "default": "",
+     "type": "string",
+     "description": "GDScript or C# source. Empty creates a blank file."
+    },
+    "overwrite": {
+     "type": "boolean",
+     "description": "Replace an existing file. Default false."
+    },
+    "old_text": {
+     "description": "Used by: script, shader."
+    },
+    "new_text": {
+     "description": "Used by: script, shader."
+    },
+    "replace_all": {
+     "description": "Used by: script, shader."
+    },
+    "shader_type": {
+     "description": "Used by: shader."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "file_look",
+   "tier": "read",
+   "description": "Read or search files in the open Godot project. Does not change the project. Ops: text, files, resources.",
+   "default_op": "text",
+   "multi": true,
+   "ops": {
+    "text": {
+     "upstream": "filesystem_manage",
+     "op": "read_text",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "text(path*)",
+     "doc": "• read_text(path) Read a text file at a ``res://`` path. Returns content, size, line_count.",
+     "guard": "read_file",
+     "guard_op": "text",
+     "effect_key": "filesystem_manage.read_text"
+    },
+    "files": {
+     "upstream": "filesystem_manage",
+     "op": "search",
+     "keys": [
+      "name",
+      "type",
+      "path",
+      "offset",
+      "limit"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "files(name, type, path, offset, limit)",
+     "doc": "• search(name=\"\", type=\"\", path=\"\", offset=0, limit=100) Find files by name, resource type, or path substring. At least one filter must be set. Paginated.",
+     "guard": "search_files",
+     "guard_op": "files",
+     "effect_key": "filesystem_manage.search"
+    },
+    "resources": {
+     "upstream": "resource_manage",
+     "op": "search",
+     "keys": [
+      "type",
+      "path",
+      "offset",
+      "limit"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "resources(type, path, offset, limit)",
+     "doc": "• search(type=\"\", path=\"\", offset=0, limit=100) Search for resources by type or path. Type matching includes subclasses. At least one filter required. Paginated.",
+     "guard": "search_files",
+     "guard_op": "resources",
+     "effect_key": "resource_manage.search"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "text",
+      "files",
+      "resources"
+     ],
+     "description": "Operation. One of: text, files, resources."
+    },
+    "path": {
+     "description": "Used by: text, resource."
+    },
+    "name": {
+     "description": "Used by: files."
+    },
+    "type": {
+     "description": "Used by: files, resources."
+    },
+    "offset": {
+     "description": "Used by: files, resources."
+    },
+    "limit": {
+     "description": "Used by: files, resources."
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "file_do",
+   "tier": "destructive",
+   "description": "Write, move, delete or reimport a Godot project file. Asks the user for approval every time. Ops: resource, write_file, delete_file, delete_file_permanently, move, rename, scan, reimport.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "resource": {
+     "upstream": "resource_manage",
+     "op": "load",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "resource(path*)",
+     "doc": "• load(path) Inspect a .tres / .res — returns type and editor-visible properties.",
+     "guard": "read_file",
+     "guard_op": "resource",
+     "effect_key": "resource_manage.load"
+    },
+    "write_file": {
+     "upstream": "filesystem_manage",
+     "op": "write_text",
+     "keys": [
+      "path",
+      "content"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "write(path*, content)",
+     "doc": "• write_text(path, content=\"\") Create or overwrite a text file. Updates the editor filesystem entry for that one file (single-file update, not a full scan). Newly-created files include ``data.cleanup.rm`` for transient smoke tests; overwrite omits the field.",
+     "file_create": [
+      "path"
+     ],
+     "node_keys": [
+      "path"
+     ],
+     "guard": "write_file",
+     "guard_op": "write",
+     "effect_key": "filesystem_manage.write_text"
+    },
+    "delete_file": {
+     "upstream": "filesystem_manage",
+     "op": "remove",
+     "keys": [
+      "path",
+      "force"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "remove(path*, force)",
+     "doc": "• remove(path, force=False, permanent=False) Default: OS trash. Known references block unless force=True; force never overrides incomplete discovery or protected paths. Permanent deletion supports files only. Directory deletion uses trash.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "delete_file",
+     "guard_op": "remove",
+     "effect_key": "filesystem_manage.remove"
+    },
+    "delete_file_permanently": {
+     "upstream": "filesystem_manage",
+     "op": "remove",
+     "keys": [
+      "path",
+      "force"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "remove(path*, force)",
+     "fixed": {
+      "permanent": true
+     },
+     "doc": "• remove(path, force=False, permanent=False) Default: OS trash. Known references block unless force=True; force never overrides incomplete discovery or protected paths. Permanent deletion supports files only. Directory deletion uses trash.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "delete_file_permanently",
+     "guard_op": "remove",
+     "effect_key": "filesystem_manage.remove"
+    },
+    "move": {
+     "upstream": "filesystem_manage",
+     "op": "move",
+     "keys": [
+      "path",
+      "new_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "new_path"
+     ],
+     "sig": "move(path*, new_path*)",
+     "doc": "• move(path, new_path), rename(path, new_name) Move a resource group with .uid/.import sidecars and preserve proven UID references. Destination parent must exist. Literal-path owners, project settings, open scene tabs, links and incomplete discovery are refused before mutation; dependency rewriting is unsupported.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "move_file",
+     "guard_op": "move",
+     "effect_key": "filesystem_manage.move"
+    },
+    "rename": {
+     "upstream": "filesystem_manage",
+     "op": "rename",
+     "keys": [
+      "path",
+      "new_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "new_name"
+     ],
+     "sig": "rename(path*, new_name*)",
+     "doc": "• move(path, new_path), rename(path, new_name) Move a resource group with .uid/.import sidecars and preserve proven UID references. Destination parent must exist. Literal-path owners, project settings, open scene tabs, links and incomplete discovery are refused before mutation; dependency rewriting is unsupported.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "move_file",
+     "guard_op": "rename",
+     "effect_key": "filesystem_manage.rename"
+    },
+    "scan": {
+     "upstream": "filesystem_manage",
+     "op": "scan",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "scan()",
+     "doc": "• scan() Force a full ``EditorFileSystem.scan()`` and wait for it to settle. This is the headless equivalent of the editor regaining window focus: ``write_text``/``script_create`` register single files but do NOT rebuild the global ``class_name`` table, so a freshly-created ``class_name MyThing extends Resource`` is invisible to ``resource_manage``/type references until a scan runs. Call this once after adding ``class_name`` scripts when the editor isn't focused. Single-flight (awaits any in-progress scan rather than stacking another). Returns ``scan_completed`` and ``global_classes_registered_delta``.",
+     "guard": "import_files",
+     "guard_op": "scan",
+     "effect_key": "filesystem_manage.scan"
+    },
+    "reimport": {
+     "upstream": "filesystem_manage",
+     "op": "reimport",
+     "keys": [
+      "paths"
+     ],
+     "any_keys": false,
+     "required": [
+      "paths"
+     ],
+     "sig": "reimport(paths*)",
+     "doc": "• reimport(paths) Force-reimport the listed files via ``EditorFileSystem.update_file``. ``paths`` is a list of res:// paths. Intended for imported assets such as textures, models, and audio. Paths that are not imported resources (``.gd`` scripts, ``.tscn``, hand-written ``.tres``, or an asset the editor has not imported yet) report under ``skipped_non_imported`` rather than ``reimported``: their filesystem entry is refreshed, but no import runs, so a success there is not evidence that a script parsed or that diagnostics were produced. Use ``script_patch``/``script_create`` to save a script and receive fresh diagnostics, or ``scan`` for an asset awaiting its first import. Returns ``reimported``, ``skipped_non_imported``, ``not_found`` and their counts.",
+     "guard": "import_files",
+     "guard_op": "reimport",
+     "effect_key": "filesystem_manage.reimport"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "resource",
+      "write_file",
+      "delete_file",
+      "delete_file_permanently",
+      "move",
+      "rename",
+      "scan",
+      "reimport"
+     ],
+     "description": "Operation. One of: resource, write_file, delete_file, delete_file_permanently, move, rename, scan, reimport."
+    },
+    "path": {
+     "description": "Used by: text, resource."
+    },
+    "content": {
+     "description": ""
+    },
+    "overwrite": {
+     "type": "boolean",
+     "description": "Replace an existing file. Default false."
+    },
+    "force": {
+     "description": ""
+    },
+    "new_path": {
+     "description": "Used by: move."
+    },
+    "new_name": {
+     "description": "Used by: rename."
+    },
+    "paths": {
+     "description": "Used by: reimport."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "project_look",
+   "tier": "read",
+   "description": "Read Godot project settings, input map and autoloads. Does not change the project. Ops: get, autoloads, input_map, test_results, addon_tools.",
+   "default_op": "get",
+   "multi": true,
+   "ops": {
+    "get": {
+     "upstream": "project_manage",
+     "op": "settings_get",
+     "keys": [
+      "key"
+     ],
+     "any_keys": false,
+     "required": [
+      "key"
+     ],
+     "sig": "get(key*)",
+     "doc": "• settings_get(key) Read a ProjectSettings key (e.g. \"application/config/name\").",
+     "guard": "project_setting",
+     "guard_op": "get",
+     "effect_key": "project_manage.settings_get"
+    },
+    "autoloads": {
+     "upstream": "autoload_manage",
+     "op": "list",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "autoloads()",
+     "doc": "• list() List autoloads with name, path, and singleton flag.",
+     "guard": "project_setting",
+     "guard_op": "autoloads",
+     "effect_key": "autoload_manage.list"
+    },
+    "input_map": {
+     "upstream": "input_map_manage",
+     "op": "list",
+     "keys": [
+      "include_builtin"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "input_map(include_builtin)",
+     "doc": "• list(include_builtin=False) List input actions and their bound events. By default only user-authored actions (those persisted in ``project.godot`` under ``input/<name>``) are returned; pass ``include_builtin=True`` to also surface Godot's ``ui_*`` and editor-runtime actions (``spatial_editor/*``, etc.). The ``is_builtin`` field on each entry is true for any action not authored by the user.",
+     "guard": "project_setting",
+     "guard_op": "input_map",
+     "effect_key": "input_map_manage.list"
+    },
+    "test_results": {
+     "upstream": "test_manage",
+     "op": "results_get",
+     "keys": [
+      "verbose"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "test_results(verbose)",
+     "doc": "• results_get(verbose=False) Same shape as test_run — full results from the last run, no re-execution. verbose=True includes every individual test result.",
+     "guard": "project_setting",
+     "guard_op": "test_results",
+     "effect_key": "test_manage.results_get"
+    },
+    "addon_tools": {
+     "upstream": "custom_manage",
+     "op": "list",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "addon_tools()",
+     "doc": "List or invoke custom tools registered by third-party addons. Active session only. Use op=\"list\" to discover registered tools. op=\"invoke\" requires params: tool_name (string); optional: params (dict, forwarded to the addon handler unvalidated — shape per the tool's params_schema from op=\"list\"). Inside batch_execute, address a custom tool as \"custom_tool:<name>\" (deferred tools cannot run in batches). Some custom tools are also registered first-class as \"custom_<name>\" with their own schema — prefer those when present. Canonical call shape: ``{\"op\": \"<verb>\", \"params\": {...}}``. Flat op parameters are accepted as a compatibility alias when the client transmits them; ``op`` and ``session_id`` remain top-level.",
+     "guard": "project_setting",
+     "guard_op": "addon_tools",
+     "effect_key": "custom_manage.list"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "get",
+      "autoloads",
+      "input_map",
+      "test_results",
+      "addon_tools"
+     ],
+     "description": "Operation. One of: get, autoloads, input_map, test_results, addon_tools."
+    },
+    "key": {
+     "description": "Used by: get."
+    },
+    "include_builtin": {
+     "description": "Used by: input_map."
+    },
+    "verbose": {
+     "description": "Used by: test_results."
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "project_do",
+   "tier": "change",
+   "description": "Change Godot project settings or run and stop the game. Asks the user for approval every time. Ops: set, set_main_scene, autoload_add, autoload_remove, input_add_action, input_ensure_action, input_remove_action, input_bind, input_ensure_binding, run_game, stop_game.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "set": {
+     "upstream": "project_manage",
+     "op": "settings_set",
+     "keys": [
+      "key",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [
+      "key",
+      "value"
+     ],
+     "sig": "set(key*, value*)",
+     "doc": "• settings_set(key, value) Write a ProjectSettings key and persist to project.godot. Refuses the startup-execution keys (``autoload/*``, ``editor_plugins/*``, ``application/run/main_scene``, ``editor/run/main_run_args``, ``editor/script/templates_search_path``); use ``set_main_scene`` / ``autoload_manage(op=\"add\")`` for the two that have a validated route.",
+     "guard": "edit_project_settings",
+     "guard_op": "set",
+     "effect_key": "project_manage.settings_set"
+    },
+    "set_main_scene": {
+     "upstream": "project_manage",
+     "op": "set_main_scene",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "set_main_scene(path*)",
+     "doc": "• set_main_scene(path) Set the project's main scene — the scene ``project_run(mode=\"main\")`` boots and the engine loads at startup. Writes ``application/run/main_scene`` and persists to project.godot. ``path`` must be a ``res://`` scene inside the project that already exists and loads as a PackedScene, so a scaffolded project can be made runnable without opening the generic startup-execution surface.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_project_settings",
+     "guard_op": "set_main_scene",
+     "effect_key": "project_manage.set_main_scene"
+    },
+    "autoload_add": {
+     "upstream": "autoload_manage",
+     "op": "add",
+     "keys": [
+      "name",
+      "path",
+      "singleton"
+     ],
+     "any_keys": false,
+     "required": [
+      "name",
+      "path"
+     ],
+     "sig": "autoload_add(name*, path*, singleton)",
+     "doc": "• add(name, path, singleton=True) Register an autoload (script or PackedScene) by ``res://`` path.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_project_settings",
+     "guard_op": "autoload_add",
+     "effect_key": "autoload_manage.add"
+    },
+    "autoload_remove": {
+     "upstream": "autoload_manage",
+     "op": "remove",
+     "keys": [
+      "name"
+     ],
+     "any_keys": false,
+     "required": [
+      "name"
+     ],
+     "sig": "autoload_remove(name*)",
+     "doc": "• remove(name) Unregister an autoload by name. The underlying file is not deleted.",
+     "guard": "edit_project_settings",
+     "guard_op": "autoload_remove",
+     "effect_key": "autoload_manage.remove"
+    },
+    "input_add_action": {
+     "upstream": "input_map_manage",
+     "op": "add_action",
+     "keys": [
+      "action",
+      "deadzone"
+     ],
+     "any_keys": false,
+     "required": [
+      "action"
+     ],
+     "sig": "input_add_action(action*, deadzone)",
+     "doc": "• add_action(action, deadzone=0.5) Create a new empty input action. ``deadzone`` must be in ``[0.0, 1.0]`` — Godot uses it as the analog-stick dead-zone threshold; values outside this range are rejected with ``VALUE_OUT_OF_RANGE``. Typical values are 0.2-0.5; leave the default 0.5 unless you have a reason. Not a key-repeat delay.",
+     "guard": "edit_project_settings",
+     "guard_op": "input_add_action",
+     "effect_key": "input_map_manage.add_action"
+    },
+    "input_ensure_action": {
+     "upstream": "input_map_manage",
+     "op": "ensure_action",
+     "keys": [
+      "action",
+      "deadzone"
+     ],
+     "any_keys": false,
+     "required": [
+      "action"
+     ],
+     "sig": "input_ensure_action(action*, deadzone)",
+     "doc": "• ensure_action(action, deadzone=0.5) Idempotently create or persist an input action. If the action exists in live InputMap or in project.godot, the existing state is preserved.",
+     "guard": "edit_project_settings",
+     "guard_op": "input_ensure_action",
+     "effect_key": "input_map_manage.ensure_action"
+    },
+    "input_remove_action": {
+     "upstream": "input_map_manage",
+     "op": "remove_action",
+     "keys": [
+      "action"
+     ],
+     "any_keys": false,
+     "required": [
+      "action"
+     ],
+     "sig": "input_remove_action(action*)",
+     "doc": "• remove_action(action) Remove an action and all its event bindings. Also removes actions persisted in project.godot but not loaded in the live InputMap (``loaded_in_input_map: false`` in ``list``), e.g. actions created by a previous editor session.",
+     "guard": "edit_project_settings",
+     "guard_op": "input_remove_action",
+     "effect_key": "input_map_manage.remove_action"
+    },
+    "input_bind": {
+     "upstream": "input_map_manage",
+     "op": "bind_event",
+     "keys": [
+      "action",
+      "event_type"
+     ],
+     "any_keys": true,
+     "required": [
+      "action",
+      "event_type"
+     ],
+     "sig": "input_bind(action*, event_type*)",
+     "doc": "• bind_event(action, event_type, keycode=\"\", ctrl=False, alt=False, shift=False, meta=False, button=None, axis=None, axis_value=1.0) Bind a key/mouse/gamepad event to an action. The action must already exist (call ``add_action`` first). ``event_type`` is ``\"key\"`` | ``\"mouse_button\"`` | ``\"joy_button\"`` | ``\"joy_axis\"``.",
+     "guard": "edit_project_settings",
+     "guard_op": "input_bind",
+     "effect_key": "input_map_manage.bind_event"
+    },
+    "input_ensure_binding": {
+     "upstream": "input_map_manage",
+     "op": "ensure_binding",
+     "keys": [
+      "action",
+      "event_type",
+      "deadzone"
+     ],
+     "any_keys": true,
+     "required": [
+      "action",
+      "event_type"
+     ],
+     "sig": "input_ensure_binding(action*, event_type*, deadzone)",
+     "doc": "• ensure_binding(action, event_type, ...) Idempotently ensure the action exists and has the requested binding.",
+     "guard": "edit_project_settings",
+     "guard_op": "input_ensure_binding",
+     "effect_key": "input_map_manage.ensure_binding"
+    },
+    "run_game": {
+     "upstream": "project_run",
+     "op": null,
+     "keys": [
+      "mode",
+      "scene",
+      "autosave"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "run(mode, scene, autosave)",
+     "doc": "Run (play) the Godot project from the editor. Modes: - \"main\": Run the project's main scene (default). - \"current\": Run the currently open scene. - \"custom\": Run a specific scene (requires ``scene``). Idempotent: if the project is already running, returns success with ``data.was_already_running=true`` (no scene switch). To switch scenes, call ``project_manage(op=\"stop\")`` first, then ``project_run`` again. After starting playback, waits briefly for the Godot AI game helper to check in. The response includes ``game_status``, ``helper_live`` (status == \"live\"), ``session_active`` (status not in {\"not_live\", \"stopped\"}), and any ``recent_errors`` observed during the run window. The top-level booleans mirror the same fields inside ``game_status``. ``game_status.status=\"not_live\"`` means playback launched but the game did not become live before the helper-ready window elapsed; ``\"no_helper\"`` means the project has no _mcp_game_helper autoload, as with some headless/custom-main-loop setups (helper_live=false, session_active=true); ``\"stopped\"`` means playback stopped or never became active before liveness could be confirmed (helper_live=false, session_active=false); ``\"break\"`` means the game process is parked in a remote-debugger break — during boot this is a GDScript parse/load error that froze the game before the helper could register, and the response names the failing script when captured (``game_status.break`` = ``{reason, can_debug, pre_live}``). A game at a break cannot continue on its own: call ``project_manage(op=\"stop\")``, fix the error, and relaunch. Poll ``editor_state`` to see late transitions.",
+     "guard": "run_game",
+     "guard_op": "run",
+     "effect_key": "project_run"
+    },
+    "stop_game": {
+     "upstream": "project_manage",
+     "op": "stop",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "stop()",
+     "doc": "• stop() Stop the running project (game). Takes no params — call as ``project_manage(op=\"stop\")`` or with ``params={}``. Idempotent: succeeds with ``was_running=false`` if the project isn't running. Do NOT pass extra fields like ``force`` or ``reason`` inside ``params`` — only the registered keys are accepted (here, none). For multi-editor setups, pass ``session_id`` as a sibling of ``op``/``params``, not inside ``params``.",
+     "guard": "stop_game",
+     "guard_op": "stop",
+     "effect_key": "project_manage.stop"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "set",
+      "set_main_scene",
+      "autoload_add",
+      "autoload_remove",
+      "input_add_action",
+      "input_ensure_action",
+      "input_remove_action",
+      "input_bind",
+      "input_ensure_binding",
+      "run_game",
+      "stop_game"
+     ],
+     "description": "Operation. One of: set, set_main_scene, autoload_add, autoload_remove, input_add_action, input_ensure_action, input_remove_action, input_bind, input_ensure_binding, run_game, stop_game."
+    },
+    "key": {
+     "description": "Used by: set."
+    },
+    "value": {
+     "description": "Used by: set."
+    },
+    "path": {
+     "description": "Used by: set_main_scene, autoload_add."
+    },
+    "name": {
+     "description": "Used by: autoload_add, autoload_remove."
+    },
+    "singleton": {
+     "description": "Used by: autoload_add."
+    },
+    "action": {
+     "description": "Used by: input_add_action, input_ensure_action, input_remove_action, input_bind, input_ensure_binding."
+    },
+    "deadzone": {
+     "description": "Used by: input_add_action, input_ensure_action, input_ensure_binding."
+    },
+    "event_type": {
+     "description": "Used by: input_bind, input_ensure_binding."
+    },
+    "mode": {
+     "default": "main",
+     "type": "string",
+     "description": "\"main\" | \"current\" | \"custom\". Default \"main\"."
+    },
+    "scene": {
+     "default": "",
+     "type": "string",
+     "description": "Scene path (e.g. \"res://levels/level1.tscn\"). Required for \"custom\"."
+    },
+    "autosave": {
+     "type": "boolean",
+     "description": "Save every open scene before running. Default false."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "asset_look",
+   "tier": "read",
+   "description": "Read Godot materials, animations, cameras and tiles. Does not change the project. Ops: materials, animation, animations, animation_check, camera, cameras, particles, tiles, gridmap_cells, gridmap_items, nav_path. preset_fade, preset_slide, preset_shake, preset_pulse and particle_restart change the project, so they are not on this tool.",
+   "default_op": "materials",
+   "multi": true,
+   "ops": {
+    "materials": {
+     "upstream": "material_manage",
+     "op": "list",
+     "keys": [
+      "root",
+      "type"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "materials(root, type)",
+     "doc": "• list(root=\"res://\", type=\"\") List materials under root, optional type filter.",
+     "guard": "read_assets",
+     "guard_op": "materials",
+     "effect_key": "material_manage.list"
+    },
+    "animation": {
+     "upstream": "animation_manage",
+     "op": "get",
+     "keys": [
+      "player_path",
+      "animation_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "animation_name"
+     ],
+     "sig": "animation(player_path*, animation_name*)",
+     "doc": "• get(player_path, animation_name) Inspect a clip's tracks and keyframes in detail.",
+     "guard": "read_assets",
+     "guard_op": "animation",
+     "effect_key": "animation_manage.get"
+    },
+    "animations": {
+     "upstream": "animation_manage",
+     "op": "list",
+     "keys": [
+      "player_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "animations(player_path*)",
+     "doc": "• list(player_path) List animations with length, loop_mode, track_count.",
+     "guard": "read_assets",
+     "guard_op": "animations",
+     "effect_key": "animation_manage.list"
+    },
+    "animation_check": {
+     "upstream": "animation_manage",
+     "op": "validate",
+     "keys": [
+      "player_path",
+      "animation_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "animation_name"
+     ],
+     "sig": "animation_check(player_path*, animation_name*)",
+     "doc": "• validate(player_path, animation_name) Check all track paths resolve. Returns broken_count + per-track issues.",
+     "guard": "read_assets",
+     "guard_op": "animation_check",
+     "effect_key": "animation_manage.validate"
+    },
+    "camera": {
+     "upstream": "camera_manage",
+     "op": "get",
+     "keys": [
+      "camera_path"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "camera(camera_path)",
+     "doc": "• get(camera_path=\"\") Inspect a camera (class, current flag, all properties). Empty path resolves to the currently-active camera, falling back to the first.",
+     "guard": "read_assets",
+     "guard_op": "camera",
+     "effect_key": "camera_manage.get"
+    },
+    "cameras": {
+     "upstream": "camera_manage",
+     "op": "list",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "cameras()",
+     "doc": "• list() List every Camera2D/Camera3D in the scene.",
+     "guard": "read_assets",
+     "guard_op": "cameras",
+     "effect_key": "camera_manage.list"
+    },
+    "particles": {
+     "upstream": "particle_manage",
+     "op": "get",
+     "keys": [
+      "node_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path"
+     ],
+     "sig": "particles(node_path*)",
+     "doc": "• get(node_path) Inspect main props, process material, draw passes.",
+     "guard": "read_assets",
+     "guard_op": "particles",
+     "effect_key": "particle_manage.get"
+    },
+    "tiles": {
+     "upstream": "tilemap_manage",
+     "op": "tilemap_get_cells",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "tiles(path*)",
+     "doc": "• tilemap_get_cells(path) Return all used cell coordinates. Returns: {cells: [{x, y}, ...], count: int}",
+     "guard": "read_assets",
+     "guard_op": "tiles",
+     "effect_key": "tilemap_manage.tilemap_get_cells"
+    },
+    "gridmap_cells": {
+     "upstream": "gridmap_manage",
+     "op": "gridmap_get_used_cells",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "gridmap_cells(path*)",
+     "doc": "• gridmap_get_used_cells(path) Return all used cell coordinates. Returns: {cells: [{x, y, z}, ...], count: int}",
+     "guard": "read_assets",
+     "guard_op": "gridmap_cells",
+     "effect_key": "gridmap_manage.gridmap_get_used_cells"
+    },
+    "gridmap_items": {
+     "upstream": "gridmap_manage",
+     "op": "gridmap_list_library_items",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "gridmap_items(path*)",
+     "doc": "• gridmap_list_library_items(path) List the MeshLibrary items available to the GridMap. Returns: {library, items: [{item, name, mesh}...], count: int}",
+     "guard": "read_assets",
+     "guard_op": "gridmap_items",
+     "effect_key": "gridmap_manage.gridmap_list_library_items"
+    },
+    "nav_path": {
+     "upstream": "navigation_manage",
+     "op": "path_get",
+     "keys": [
+      "from_point",
+      "to_point",
+      "dimension",
+      "optimize",
+      "navigation_layers",
+      "region_path",
+      "force_sync"
+     ],
+     "any_keys": false,
+     "required": [
+      "from_point",
+      "to_point"
+     ],
+     "sig": "nav_path(from_point*, to_point*, dimension, optimize, navigation_layers, region_path, force_sync)",
+     "doc": "• path_get(from_point, to_point, dimension=\"3d\", optimize=True, navigation_layers=1, region_path=\"\", force_sync=False) Query a path between two world points ({x,y[,z]} or [x,y[,z]]). region_path selects the NavigationRegion3D/2D whose map to query; when omitted the edited scene root's world map is used — the op never guesses a scene's \"first\" region. Read-only: force_sync=False (default) never touches the map's shared async-iteration policy; force_sync=True opts in to the same toggle + map_force_update that bake uses when the query must see a just-baked region immediately. Returns points, point_count. Resource form: none — per-query read.",
+     "guard": "read_assets",
+     "guard_op": "nav_path",
+     "effect_key": "navigation_manage.path_get"
+    },
+    "preset_fade": {
+     "upstream": "animation_manage",
+     "op": "preset_fade",
+     "keys": [
+      "player_path",
+      "target_path",
+      "mode",
+      "duration",
+      "animation_name",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "target_path"
+     ],
+     "sig": "preset_fade(player_path*, target_path*, mode, duration, animation_name, overwrite)",
+     "doc": "• preset_fade(player_path, target_path, mode=\"in\", duration=0.5, animation_name=\"\", overwrite=False) One-call fade-in/out (modulate.a).",
+     "node_keys": [
+      "player_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_animation",
+     "guard_op": "preset_fade",
+     "effect_key": "animation_manage.preset_fade"
+    },
+    "preset_slide": {
+     "upstream": "animation_manage",
+     "op": "preset_slide",
+     "keys": [
+      "player_path",
+      "target_path",
+      "direction",
+      "mode",
+      "distance",
+      "duration",
+      "animation_name",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "target_path"
+     ],
+     "sig": "preset_slide(player_path*, target_path*, direction, mode, distance, duration, animation_name, overwrite)",
+     "doc": "• preset_slide(player_path, target_path, direction=\"left\", mode=\"in\", distance=None, duration=0.4, animation_name=\"\", overwrite=False) One-call slide-in/out (position).",
+     "node_keys": [
+      "player_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_animation",
+     "guard_op": "preset_slide",
+     "effect_key": "animation_manage.preset_slide"
+    },
+    "preset_shake": {
+     "upstream": "animation_manage",
+     "op": "preset_shake",
+     "keys": [
+      "player_path",
+      "target_path",
+      "intensity",
+      "duration",
+      "frequency",
+      "seed",
+      "animation_name",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "target_path"
+     ],
+     "sig": "preset_shake(player_path*, target_path*, intensity, duration, frequency, seed, animation_name, overwrite)",
+     "doc": "• preset_shake(player_path, target_path, intensity=None, duration=0.3, frequency=30.0, seed=0, animation_name=\"\", overwrite=False) One-call shake (jittered position).",
+     "node_keys": [
+      "player_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_animation",
+     "guard_op": "preset_shake",
+     "effect_key": "animation_manage.preset_shake"
+    },
+    "preset_pulse": {
+     "upstream": "animation_manage",
+     "op": "preset_pulse",
+     "keys": [
+      "player_path",
+      "target_path",
+      "from_scale",
+      "to_scale",
+      "duration",
+      "animation_name",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "target_path"
+     ],
+     "sig": "preset_pulse(player_path*, target_path*, from_scale, to_scale, duration, animation_name, overwrite)",
+     "doc": "• preset_pulse(player_path, target_path, from_scale=1.0, to_scale=1.1, duration=0.4, animation_name=\"\", overwrite=False) One-call pulse / hover-bounce (3-keyframe scale ping-pong).",
+     "node_keys": [
+      "player_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_animation",
+     "guard_op": "preset_pulse",
+     "effect_key": "animation_manage.preset_pulse"
+    },
+    "particle_restart": {
+     "upstream": "particle_manage",
+     "op": "restart",
+     "keys": [
+      "node_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path"
+     ],
+     "sig": "particle_restart(node_path*)",
+     "doc": "• restart(node_path) Restart emission. Runtime-only, not undoable.",
+     "node_keys": [
+      "node_path"
+     ],
+     "guard": "edit_particles",
+     "guard_op": "particle_restart",
+     "effect_key": "particle_manage.restart"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "materials",
+      "animation",
+      "animations",
+      "animation_check",
+      "camera",
+      "cameras",
+      "particles",
+      "tiles",
+      "gridmap_cells",
+      "gridmap_items",
+      "nav_path",
+      "preset_fade",
+      "preset_slide",
+      "preset_shake",
+      "preset_pulse",
+      "particle_restart"
+     ],
+     "description": "Operation. One of: materials, animation, animations, animation_check, camera, cameras, particles, tiles, gridmap_cells, gridmap_items, nav_path. preset_fade, preset_slide, preset_shake, preset_pulse and particle_restart change the project and are not listed."
+    },
+    "path": {
+     "description": "Used by: material, shader, visual_shader, tiles, gridmap_cells, gridmap_items."
+    },
+    "root": {
+     "description": "Used by: materials, audio."
+    },
+    "type": {
+     "description": "Used by: materials."
+    },
+    "code": {
+     "description": "Used by: shader_check."
+    },
+    "kind": {
+     "description": "Used by: shader_check."
+    },
+    "shader_type": {
+     "description": "Used by: shader_check."
+    },
+    "base_dir": {
+     "description": "Used by: shader_check."
+    },
+    "player_path": {
+     "description": "Used by: animation, animations, animation_check."
+    },
+    "animation_name": {
+     "description": "Used by: animation, animation_check."
+    },
+    "include_duration": {
+     "description": "Used by: audio."
+    },
+    "camera_path": {
+     "description": "Used by: camera."
+    },
+    "node_path": {
+     "description": "Used by: particles."
+    },
+    "tileset_path": {
+     "description": "Used by: tileset_tiles, tileset_image."
+    },
+    "source_id": {
+     "description": "Used by: tileset_tiles, tileset_image."
+    },
+    "max_size": {
+     "description": "Used by: tileset_image."
+    },
+    "from_point": {
+     "description": "Used by: nav_path."
+    },
+    "to_point": {
+     "description": "Used by: nav_path."
+    },
+    "dimension": {
+     "description": "Used by: nav_path."
+    },
+    "optimize": {
+     "description": "Used by: nav_path."
+    },
+    "navigation_layers": {
+     "description": "Used by: nav_path."
+    },
+    "region_path": {
+     "description": "Used by: nav_path."
+    },
+    "force_sync": {
+     "description": "Used by: nav_path."
+    },
+    "parent_path": {
+     "description": "Used by: player_create."
+    },
+    "name": {
+     "description": "Used by: player_create, create, create_simple."
+    },
+    "length": {
+     "description": "Used by: create, create_simple."
+    },
+    "loop_mode": {
+     "description": "Used by: create, create_simple."
+    },
+    "overwrite": {
+     "description": "Used by: create, create_simple, preset_fade, preset_slide, preset_shake, preset_pulse."
+    },
+    "tweens": {
+     "description": "Used by: create_simple."
+    },
+    "track_path": {
+     "description": "Used by: add_property_track."
+    },
+    "keyframes": {
+     "description": "Used by: add_property_track, add_method_track."
+    },
+    "interpolation": {
+     "description": "Used by: add_property_track."
+    },
+    "target_node_path": {
+     "description": "Used by: add_method_track."
+    },
+    "target_path": {
+     "description": "Used by: preset_fade, preset_slide, preset_shake, preset_pulse."
+    },
+    "mode": {
+     "description": "Used by: preset_fade, preset_slide."
+    },
+    "duration": {
+     "description": "Used by: preset_fade, preset_slide, preset_shake, preset_pulse."
+    },
+    "direction": {
+     "description": "Used by: preset_slide."
+    },
+    "distance": {
+     "description": "Used by: preset_slide."
+    },
+    "intensity": {
+     "description": "Used by: preset_shake."
+    },
+    "frequency": {
+     "description": "Used by: preset_shake."
+    },
+    "seed": {
+     "description": "Used by: preset_shake."
+    },
+    "from_scale": {
+     "description": "Used by: preset_pulse."
+    },
+    "to_scale": {
+     "description": "Used by: preset_pulse."
+    },
+    "preset": {
+     "description": "Used by: material_apply_preset, particle_preset, camera_preset."
+    },
+    "overrides": {
+     "description": "Used by: material_apply_preset, particle_preset, camera_preset."
+    },
+    "properties": {
+     "description": "Used by: particle_set_main, particle_set_process, camera_configure."
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "asset_do",
+   "tier": "destructive",
+   "description": "Edit Godot materials, UI, animation, tiles and resources. Asks the user for approval every time.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "material": {
+     "upstream": "material_manage",
+     "op": "get",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "material(path*)",
+     "doc": "• get(path) Inspect a material (type, params, uniforms, current values).",
+     "guard": "read_assets",
+     "guard_op": "material",
+     "effect_key": "material_manage.get"
+    },
+    "shader": {
+     "upstream": "material_manage",
+     "op": "shader_get",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "shader(path*)",
+     "doc": "• shader_get(path) Read a .gdshader/.gdshaderinc: full source, shader_type, uniforms, render modes, and #include list.",
+     "guard": "read_assets",
+     "guard_op": "shader",
+     "effect_key": "material_manage.shader_get"
+    },
+    "visual_shader": {
+     "upstream": "material_manage",
+     "op": "visual_shader_get",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "visual_shader(path*)",
+     "doc": "• visual_shader_get(path) Inspect a VisualShader .tres: shader_type, per-stage nodes (id, type, position, params), connections, and varyings. Use before visual_shader_edit.",
+     "guard": "read_assets",
+     "guard_op": "visual_shader",
+     "effect_key": "material_manage.visual_shader_get"
+    },
+    "shader_check": {
+     "upstream": "material_manage",
+     "op": "shader_validate",
+     "keys": [
+      "code",
+      "kind",
+      "shader_type",
+      "base_dir"
+     ],
+     "any_keys": false,
+     "required": [
+      "code"
+     ],
+     "sig": "shader_check(code*, kind, shader_type, base_dir)",
+     "doc": "• shader_validate(code, kind=\"shader\", shader_type=\"spatial\", base_dir=\"\") Parse/type-check shader source without writing a file. Returns valid plus errors/warnings. Pass base_dir (a res:// directory) to validate relative #include resolution against where the shader will live. Renderer-specific variant compilation is out of scope.",
+     "guard": "read_assets",
+     "guard_op": "shader_check",
+     "effect_key": "material_manage.shader_validate"
+    },
+    "audio": {
+     "upstream": "audio_manage",
+     "op": "list",
+     "keys": [
+      "root",
+      "include_duration"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "audio(root, include_duration)",
+     "doc": "• list(root=\"res://\", include_duration=True) Scan project for AudioStream resources (every subclass + .tres/.res).",
+     "guard": "read_assets",
+     "guard_op": "audio",
+     "effect_key": "audio_manage.list"
+    },
+    "tileset_tiles": {
+     "upstream": "tileset_manage",
+     "op": "tileset_get_atlas_tiles",
+     "keys": [
+      "tileset_path",
+      "source_id"
+     ],
+     "any_keys": false,
+     "required": [
+      "tileset_path",
+      "source_id"
+     ],
+     "sig": "tileset_tiles(tileset_path*, source_id*)",
+     "doc": "• tileset_get_atlas_tiles(tileset_path, source_id) Return all occupied atlas tile positions for one source in a TileSet. Read-only — does not modify any resource or project file. tileset_path: res:// path to the .tres TileSet resource (required) source_id: raw TileSet source id of the TileSetAtlasSource to query (required, ≥ 0) Returns: {\"tiles\": [{\"col\": int, \"row\": int}, ...], \"count\": int} Error codes (passed through from GDScript handler): MISSING_REQUIRED_PARAM — tileset_path empty or source_id absent RESOURCE_NOT_FOUND — tileset_path does not exist on disk WRONG_TYPE — not a TileSet, or source is not a TileSetAtlasSource VALUE_OUT_OF_RANGE — source_id does not exist in this TileSet",
+     "guard": "read_assets",
+     "guard_op": "tileset_tiles",
+     "effect_key": "tileset_manage.tileset_get_atlas_tiles"
+    },
+    "tileset_image": {
+     "upstream": "tileset_manage",
+     "op": "tileset_get_atlas_image",
+     "keys": [
+      "tileset_path",
+      "source_id",
+      "max_size"
+     ],
+     "any_keys": false,
+     "required": [
+      "tileset_path",
+      "source_id"
+     ],
+     "sig": "tileset_image(tileset_path*, source_id*, max_size)",
+     "doc": "• tileset_get_atlas_image(tileset_path, source_id, max_size=0) Return the atlas sprite-sheet texture of a TileSetAtlasSource as a Base64-encoded PNG image. Read-only — reads the texture directly from the resource without any UI interaction. tileset_path: res:// path to the .tres TileSet resource (required) source_id: raw TileSet source id of the TileSetAtlasSource to query (required, ≥ 0) max_size: optional int; if > 0, scale the image so its longest edge is at most max_size pixels (default 0 = full res) Returns: {\"image_base64\": str, \"width\": int, \"height\": int, \"original_width\": int, \"original_height\": int, \"format\": \"png\"} Error codes (passed through from GDScript handler): MISSING_REQUIRED_PARAM — tileset_path empty or source_id absent RESOURCE_NOT_FOUND — tileset_path does not exist on disk WRONG_TYPE — not a TileSet, source not a TileSetAtlasSource, or source has no texture assigned VALUE_OUT_OF_RANGE — source_id does not exist in this TileSet",
+     "guard": "read_assets",
+     "guard_op": "tileset_image",
+     "effect_key": "tileset_manage.tileset_get_atlas_image"
+    },
+    "player_create": {
+     "upstream": "animation_manage",
+     "op": "player_create",
+     "keys": [
+      "parent_path",
+      "name"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path"
+     ],
+     "sig": "player_create(parent_path*, name)",
+     "doc": "• player_create(parent_path, name=\"AnimationPlayer\") Create an AnimationPlayer with empty default library.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_animation",
+     "guard_op": "player_create",
+     "effect_key": "animation_manage.player_create"
+    },
+    "create": {
+     "upstream": "animation_create",
+     "op": null,
+     "keys": [
+      "player_path",
+      "name",
+      "length",
+      "loop_mode",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "name",
+      "length"
+     ],
+     "sig": "create(player_path*, name*, length*, loop_mode, overwrite)",
+     "doc": "Create a new Animation clip inside an AnimationPlayer's default library. After creating the clip, add tracks via ``animation_manage`` ops ``add_property_track`` / ``add_method_track`` / ``create_simple``. Track node paths are stored relative to the AnimationPlayer's ``root_node`` (default: its parent), not to the scene root — see ``animation_manage`` preset ops for a forgiving target_path that accepts either form. If ``player_path`` doesn't resolve, an AnimationPlayer is auto-created at that path (parent must exist).",
+     "node_keys": [
+      "player_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_animation",
+     "guard_op": "create",
+     "effect_key": "animation_create"
+    },
+    "create_simple": {
+     "upstream": "animation_manage",
+     "op": "create_simple",
+     "keys": [
+      "player_path",
+      "name",
+      "tweens",
+      "length",
+      "loop_mode",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "name",
+      "tweens"
+     ],
+     "sig": "create_simple(player_path*, name*, tweens*, length, loop_mode, overwrite)",
+     "doc": "• create_simple(player_path, name, tweens, length=None, loop_mode=\"none\", overwrite=False) High-level: build a multi-track clip from tween specs in one call. tweens: [{target, property, from, to, duration, delay?, transition?}].",
+     "node_keys": [
+      "player_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_animation",
+     "guard_op": "create_simple",
+     "effect_key": "animation_manage.create_simple"
+    },
+    "add_property_track": {
+     "upstream": "animation_manage",
+     "op": "add_property_track",
+     "keys": [
+      "player_path",
+      "animation_name",
+      "track_path",
+      "keyframes",
+      "interpolation"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "animation_name",
+      "track_path",
+      "keyframes"
+     ],
+     "sig": "add_property_track(player_path*, animation_name*, track_path*, keyframes*, interpolation)",
+     "doc": "• add_property_track(player_path, animation_name, track_path, keyframes, interpolation=\"linear\") Add a property track. track_path: \"NodeName:property\". keyframes: [{time, value, transition?}, ...]. interpolation: linear|nearest|cubic.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_animation",
+     "guard_op": "add_property_track",
+     "effect_key": "animation_manage.add_property_track"
+    },
+    "add_method_track": {
+     "upstream": "animation_manage",
+     "op": "add_method_track",
+     "keys": [
+      "player_path",
+      "animation_name",
+      "target_node_path",
+      "keyframes"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "animation_name",
+      "target_node_path",
+      "keyframes"
+     ],
+     "sig": "add_method_track(player_path*, animation_name*, target_node_path*, keyframes*)",
+     "doc": "• add_method_track(player_path, animation_name, target_node_path, keyframes) Add a method track. keyframes: [{time, method, args?}, ...].",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_animation",
+     "guard_op": "add_method_track",
+     "effect_key": "animation_manage.add_method_track"
+    },
+    "set_autoplay": {
+     "upstream": "animation_manage",
+     "op": "set_autoplay",
+     "keys": [
+      "player_path",
+      "animation_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "set_autoplay(player_path*, animation_name)",
+     "doc": "• set_autoplay(player_path, animation_name=\"\") Set autoplay. Empty animation_name clears.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_animation",
+     "guard_op": "set_autoplay",
+     "effect_key": "animation_manage.set_autoplay"
+    },
+    "play": {
+     "upstream": "animation_manage",
+     "op": "play",
+     "keys": [
+      "player_path",
+      "animation_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "play(player_path*, animation_name)",
+     "doc": "• play(player_path, animation_name=\"\") Editor preview. Not saved with scene.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_animation",
+     "guard_op": "play",
+     "effect_key": "animation_manage.play"
+    },
+    "stop": {
+     "upstream": "animation_manage",
+     "op": "stop",
+     "keys": [
+      "player_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "stop(player_path*)",
+     "doc": "• stop(player_path) Stop editor preview. Not saved with scene.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_animation",
+     "guard_op": "stop",
+     "effect_key": "animation_manage.stop"
+    },
+    "build_layout": {
+     "upstream": "ui_manage",
+     "op": "build_layout",
+     "keys": [
+      "tree",
+      "parent_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "tree"
+     ],
+     "sig": "build_layout(tree*, parent_path)",
+     "doc": "• build_layout(tree, parent_path=\"\") Atomically build a UI subtree from a nested spec ({type, name?, properties?, anchor_preset?, anchor_margin?, theme?, children?}). Validates everything before mutating. `properties` is direct node properties only. Theme constants like container spacing live under `theme_override_constants/<name>` — e.g. `{\"theme_override_constants/separation\": 8}` on a VBoxContainer, not `{\"separation\": 8}` (which errors). `theme` and `anchor_preset` require a Control / Window — for a HUD, nest a Control under a CanvasLayer and apply them to the Control child, not the layer itself.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "build_layout",
+     "effect_key": "ui_manage.build_layout"
+    },
+    "set_text": {
+     "upstream": "ui_manage",
+     "op": "set_text",
+     "keys": [
+      "path",
+      "text"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "text"
+     ],
+     "sig": "set_text(path*, text*)",
+     "doc": "• set_text(path, text) Set text on a Label/Button/LineEdit/TextEdit/RichTextLabel.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "set_text",
+     "effect_key": "ui_manage.set_text"
+    },
+    "set_richtext": {
+     "upstream": "ui_manage",
+     "op": "set_richtext",
+     "keys": [
+      "path",
+      "text",
+      "bbcode"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "text"
+     ],
+     "sig": "set_richtext(path*, text*, bbcode)",
+     "doc": "• set_richtext(path, text, bbcode=True) Set a RichTextLabel's text with BBcode parsing on by default — \"[color=red]HP[/color]\" renders as markup, and bbcode=False writes literal text. Undoable.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "set_richtext",
+     "effect_key": "ui_manage.set_richtext"
+    },
+    "set_anchor_preset": {
+     "upstream": "ui_manage",
+     "op": "set_anchor_preset",
+     "keys": [
+      "path",
+      "preset",
+      "resize_mode",
+      "margin"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "preset"
+     ],
+     "sig": "set_anchor_preset(path*, preset*, resize_mode, margin)",
+     "doc": "• set_anchor_preset(path, preset, resize_mode=\"minsize\", margin=0) Apply a Control layout preset. preset: top_left | top_right | bottom_left | bottom_right | center_left | center_top | center_right | center_bottom | center | left_wide | top_wide | right_wide | bottom_wide | vcenter_wide | hcenter_wide | full_rect. resize_mode: minsize | keep_width | keep_height | keep_size. Target must be a Control. CanvasLayer is the canonical HUD parent but is not a Control — put a Control child under the CanvasLayer and apply the preset to that overlay.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "set_anchor_preset",
+     "effect_key": "ui_manage.set_anchor_preset"
+    },
+    "draw_recipe": {
+     "upstream": "ui_manage",
+     "op": "draw_recipe",
+     "keys": [
+      "path",
+      "ops",
+      "clear_existing"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "ops"
+     ],
+     "sig": "draw_recipe(path*, ops*, clear_existing)",
+     "doc": "• draw_recipe(path, ops, clear_existing=True) Attach a declarative list of vector _draw() ops to a Control — radar sweeps, gauges, corner brackets, crosshairs, waveforms. Op kinds: line | rect | arc | circle | polyline | polygon | string.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "draw_recipe",
+     "effect_key": "ui_manage.draw_recipe"
+    },
+    "theme_create": {
+     "upstream": "theme_manage",
+     "op": "create",
+     "keys": [
+      "path",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "theme_create(path*, overwrite)",
+     "doc": "• create(path, overwrite=False) Create a new empty Theme .tres at a res:// path.",
+     "node_keys": [
+      "path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_ui",
+     "guard_op": "theme_create",
+     "effect_key": "theme_manage.create"
+    },
+    "theme_apply": {
+     "upstream": "theme_manage",
+     "op": "apply",
+     "keys": [
+      "node_path",
+      "theme_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path"
+     ],
+     "sig": "theme_apply(node_path*, theme_path)",
+     "doc": "• apply(node_path, theme_path=\"\") Assign the theme to a Control (cascades to descendants). Empty theme_path clears.",
+     "node_keys": [
+      "node_path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "theme_apply",
+     "effect_key": "theme_manage.apply"
+    },
+    "theme_set_color": {
+     "upstream": "theme_manage",
+     "op": "set_color",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name",
+      "value"
+     ],
+     "sig": "theme_set_color(theme_path*, class_name*, name*, value*)",
+     "doc": "• set_color(theme_path, class_name, name, value) Set a color slot. value: \"#rrggbb\"/\"#rrggbbaa\", named, or {\"r\",\"g\",\"b\",\"a\"}.",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_color",
+     "effect_key": "theme_manage.set_color"
+    },
+    "theme_set_constant": {
+     "upstream": "theme_manage",
+     "op": "set_constant",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name",
+      "value"
+     ],
+     "sig": "theme_set_constant(theme_path*, class_name*, name*, value*)",
+     "doc": "• set_constant(theme_path, class_name, name, value) Set an integer constant (separation, margin, padding).",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_constant",
+     "effect_key": "theme_manage.set_constant"
+    },
+    "theme_set_font": {
+     "upstream": "theme_manage",
+     "op": "set_font",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "font_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name",
+      "font_path"
+     ],
+     "sig": "theme_set_font(theme_path*, class_name*, name*, font_path*)",
+     "doc": "• set_font(theme_path, class_name, name, font_path) Assign a Font resource (FontFile .ttf/.otf, FontVariation) to a font slot. Loads the imported resource from res://.",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_font",
+     "effect_key": "theme_manage.set_font"
+    },
+    "theme_set_font_size": {
+     "upstream": "theme_manage",
+     "op": "set_font_size",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name",
+      "value"
+     ],
+     "sig": "theme_set_font_size(theme_path*, class_name*, name*, value*)",
+     "doc": "• set_font_size(theme_path, class_name, name, value) Set a font_size slot in pixels.",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_font_size",
+     "effect_key": "theme_manage.set_font_size"
+    },
+    "theme_set_icon": {
+     "upstream": "theme_manage",
+     "op": "set_icon",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "texture_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name",
+      "texture_path"
+     ],
+     "sig": "theme_set_icon(theme_path*, class_name*, name*, texture_path*)",
+     "doc": "• set_icon(theme_path, class_name, name, texture_path) Assign a Texture2D to an icon slot (checkbox marks, dropdown arrows).",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_icon",
+     "effect_key": "theme_manage.set_icon"
+    },
+    "theme_set_stylebox_flat": {
+     "upstream": "theme_manage",
+     "op": "set_stylebox_flat",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "bg_color",
+      "border_color",
+      "border",
+      "corners",
+      "margins",
+      "shadow",
+      "anti_aliasing"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name"
+     ],
+     "sig": "theme_set_stylebox_flat(theme_path*, class_name*, name*, bg_color, border_color, border, corners, margins, shadow, anti_aliasing)",
+     "doc": "• set_stylebox_flat(theme_path, class_name, name, bg_color?, border_color?, border?, corners?, margins?, shadow?, anti_aliasing?) Compose a StyleBoxFlat (panels, button states, line edits). border/corners/margins/shadow each accept \"all\" + per-side keys.",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_stylebox_flat",
+     "effect_key": "theme_manage.set_stylebox_flat"
+    },
+    "theme_set_stylebox_texture": {
+     "upstream": "theme_manage",
+     "op": "set_stylebox_texture",
+     "keys": [
+      "theme_path",
+      "class_name",
+      "name",
+      "texture_path",
+      "region",
+      "margins",
+      "axis_stretch_horizontal",
+      "axis_stretch_vertical",
+      "modulate_color",
+      "draw_center"
+     ],
+     "any_keys": false,
+     "required": [
+      "theme_path",
+      "class_name",
+      "name",
+      "texture_path"
+     ],
+     "sig": "theme_set_stylebox_texture(theme_path*, class_name*, name*, texture_path*, region, margins, axis_stretch_horizontal, axis_stretch_vertical, modulate_color, draw_center)",
+     "doc": "• set_stylebox_texture(theme_path, class_name, name, texture_path, region?, margins?, axis_stretch_horizontal?, axis_stretch_vertical?, modulate_color?, draw_center?) Compose a 9-slice StyleBoxTexture from an imported image — pixel-art buttons and artwork-backed panels. region is {position, size} or [x,y,w,h]; margins are {all|left|top|right|bottom}; axis stretch modes are \"stretch\" | \"tile\" | \"tile_fit\".",
+     "guard": "edit_ui",
+     "guard_op": "theme_set_stylebox_texture",
+     "effect_key": "theme_manage.set_stylebox_texture"
+    },
+    "theme_stylebox_override": {
+     "upstream": "theme_manage",
+     "op": "stylebox_override",
+     "keys": [
+      "path",
+      "slot",
+      "patch"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "slot",
+      "patch"
+     ],
+     "sig": "theme_stylebox_override(path*, slot*, patch*)",
+     "doc": "• stylebox_override(path, slot, patch) Per-node stylebox override: duplicate the stylebox the Control resolves for `slot`, apply a StyleBoxFlat patch (same keys as set_stylebox_flat; unknown top-level keys are refused), and attach it via add_theme_stylebox_override. The action lands in the scene's undo history, so the editor's scene undo restores the previous override or removes it. The zero-border angular-frame / flash-the-bar-bg pattern without mutating the theme.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_ui",
+     "guard_op": "theme_stylebox_override",
+     "effect_key": "theme_manage.stylebox_override"
+    },
+    "material_create": {
+     "upstream": "material_manage",
+     "op": "create",
+     "keys": [
+      "path",
+      "type",
+      "shader_path",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "material_create(path*, type, shader_path, overwrite)",
+     "doc": "• create(path, type=\"standard\", shader_path=\"\", overwrite=False) Create + save a material .tres at a res:// path. type: \"standard\" | \"orm\" | \"canvas_item\" | \"shader\". For \"shader\", shader_path points to a .gdshader or VisualShader .tres.",
+     "node_keys": [
+      "path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_material",
+     "guard_op": "material_create",
+     "effect_key": "material_manage.create"
+    },
+    "material_set_param": {
+     "upstream": "material_manage",
+     "op": "set_param",
+     "keys": [
+      "path",
+      "param",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "param",
+      "value"
+     ],
+     "sig": "material_set_param(path*, param*, value*)",
+     "doc": "• set_param(path, param, value) Set a built-in property on a .tres material. Enum-valued params accept names (\"alpha\" -> TRANSPARENCY_ALPHA). Color/Vector dicts. Texture properties accept res:// paths.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_material",
+     "guard_op": "material_set_param",
+     "effect_key": "material_manage.set_param"
+    },
+    "material_set_shader_param": {
+     "upstream": "material_manage",
+     "op": "set_shader_param",
+     "keys": [
+      "path",
+      "param",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "param",
+      "value"
+     ],
+     "sig": "material_set_shader_param(path*, param*, value*)",
+     "doc": "• set_shader_param(path, param, value) Set a shader uniform on a ShaderMaterial.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_material",
+     "guard_op": "material_set_shader_param",
+     "effect_key": "material_manage.set_shader_param"
+    },
+    "material_assign": {
+     "upstream": "material_manage",
+     "op": "assign",
+     "keys": [
+      "node_path",
+      "resource_path",
+      "slot",
+      "create_if_missing",
+      "type"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path"
+     ],
+     "sig": "material_assign(node_path*, resource_path, slot, create_if_missing, type)",
+     "doc": "• assign(node_path, resource_path=\"\", slot=\"override\", create_if_missing=False, type=\"standard\") Assign a material to a node slot. Slots: \"override\" | \"surface_<N>\" | \"canvas\" | \"process\". When create_if_missing=True and no resource_path, makes an inline material of `type`.",
+     "node_keys": [
+      "node_path"
+     ],
+     "guard": "edit_material",
+     "guard_op": "material_assign",
+     "effect_key": "material_manage.assign"
+    },
+    "material_apply_to_node": {
+     "upstream": "material_manage",
+     "op": "apply_to_node",
+     "keys": [
+      "node_path",
+      "type",
+      "params",
+      "slot",
+      "save_to",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path"
+     ],
+     "sig": "material_apply_to_node(node_path*, type, params, slot, save_to, overwrite)",
+     "doc": "• apply_to_node(node_path, type=\"standard\", params=None, slot=\"override\", save_to=\"\", overwrite=False) High-level: build + set params + assign in one undo. save_to optionally persists to disk; errors if the file already exists unless overwrite=True.",
+     "node_keys": [
+      "node_path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_material",
+     "guard_op": "material_apply_to_node",
+     "effect_key": "material_manage.apply_to_node"
+    },
+    "material_apply_preset": {
+     "upstream": "material_manage",
+     "op": "apply_preset",
+     "keys": [
+      "preset",
+      "path",
+      "node_path",
+      "overrides"
+     ],
+     "any_keys": false,
+     "required": [
+      "preset"
+     ],
+     "sig": "material_apply_preset(preset*, path, node_path, overrides)",
+     "doc": "• apply_preset(preset, path=\"\", node_path=\"\", overrides=None) Curated looks: metal, glass, emissive, unlit, matte, ceramic. path saves to disk; node_path assigns to a node; overrides merge.",
+     "node_keys": [
+      "path",
+      "node_path"
+     ],
+     "guard": "edit_material",
+     "guard_op": "material_apply_preset",
+     "effect_key": "material_manage.apply_preset"
+    },
+    "shader_create": {
+     "upstream": "material_manage",
+     "op": "shader_create",
+     "keys": [
+      "resource_path",
+      "code",
+      "overwrite",
+      "shader_type"
+     ],
+     "any_keys": false,
+     "required": [
+      "resource_path",
+      "code"
+     ],
+     "sig": "shader_create(resource_path*, code*, overwrite, shader_type)",
+     "doc": "• shader_create(resource_path, code, overwrite=False, shader_type=\"spatial\") Create/replace a raw .gdshader (or .gdshaderinc include) from source text. The code is parsed through Godot's shader compiler for the declared shader type before anything is written: parse errors reject the write with diagnostics and leave any existing file untouched. This is parse/type validation, not a guarantee that every renderer variant compiles. Returns shader_type, uniforms (type, hint, hint_string, default), and cleanup hints. Not undoable.",
+     "upstream_overwrite": true,
+     "guard": "edit_material",
+     "guard_op": "shader_create",
+     "effect_key": "material_manage.shader_create"
+    },
+    "visual_shader_create": {
+     "upstream": "material_manage",
+     "op": "visual_shader_create_graph",
+     "keys": [
+      "resource_path",
+      "stages",
+      "shader_type",
+      "overwrite",
+      "varyings"
+     ],
+     "any_keys": false,
+     "required": [
+      "resource_path",
+      "stages"
+     ],
+     "sig": "visual_shader_create(resource_path*, stages*, shader_type, overwrite, varyings)",
+     "doc": "• visual_shader_create_graph(resource_path, stages, shader_type=\"spatial\", overwrite=False, varyings=None) Create/save a VisualShader .tres only (not undoable). Each stages entry is {stage, nodes: [{id, type, position?, params?}], connections: [{from_node, from_port, to_node, to_port}]}. Explicit stages must match spatial/canvas_item (vertex/fragment/light), particles (start/process/collide/start_custom/process_custom), sky (sky), or fog (fog). IDs are stage-local integers >=2 or nonempty strings; output is \"output\"/0. Limits: 256 nodes, 1024 connections total. Existing destination directory required. Returns id_map by stage as [{id, node_id}] in request order. varyings: [{name, mode: \"vertex_to_frag_light\"|\"frag_to_light\", type: \"float\"|\"int\"|\"uint\"|\"vector2\"|\"vector3\"|\"vector4\"|\"boolean\"|\"transform\"}] (spatial/canvas_item only). The generated source is parsed through the engine's shader compiler before saving; a graph it rejects (for example a parameter named after a shader keyword) is not written. Renderers that cannot compile a shader type fall back to validating the generated declarations, so the advertised modes stay accepted. Use create(type=\"shader\", shader_path=<saved .tres>) then assign separately.",
+     "upstream_overwrite": true,
+     "guard": "edit_material",
+     "guard_op": "visual_shader_create",
+     "effect_key": "material_manage.visual_shader_create_graph"
+    },
+    "visual_shader_edit": {
+     "upstream": "material_manage",
+     "op": "visual_shader_edit",
+     "keys": [
+      "resource_path",
+      "operations"
+     ],
+     "any_keys": false,
+     "required": [
+      "resource_path",
+      "operations"
+     ],
+     "sig": "visual_shader_edit(resource_path*, operations*)",
+     "doc": "• visual_shader_edit(resource_path, operations) Apply a validated operation list to an existing VisualShader .tres: add_node / remove_node / replace_node / set_node_params / set_node_position / connect / disconnect / add_varying / remove_varying. Operations run in order; string node ids added by the call are returned in `added` and can be referenced by later operations. The whole result is validated in memory, then saved atomically; not undoable.",
+     "guard": "edit_material",
+     "guard_op": "visual_shader_edit",
+     "effect_key": "material_manage.visual_shader_edit"
+    },
+    "particle_create": {
+     "upstream": "particle_manage",
+     "op": "create",
+     "keys": [
+      "parent_path",
+      "name",
+      "type"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path"
+     ],
+     "sig": "particle_create(parent_path*, name, type)",
+     "doc": "• create(parent_path, name=\"Particles\", type=\"gpu_3d\") Create an emitter. type: \"gpu_3d\" | \"gpu_2d\" | \"cpu_3d\" | \"cpu_2d\". For GPU emitters, auto-creates ProcessMaterial; for gpu_3d, also a default QuadMesh draw pass.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_particles",
+     "guard_op": "particle_create",
+     "effect_key": "particle_manage.create"
+    },
+    "particle_set_main": {
+     "upstream": "particle_manage",
+     "op": "set_main",
+     "keys": [
+      "node_path",
+      "properties"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path",
+      "properties"
+     ],
+     "sig": "particle_set_main(node_path*, properties*)",
+     "doc": "• set_main(node_path, properties) Node-level props: amount, lifetime, one_shot, explosiveness, preprocess, speed_scale, randomness, fixed_fps, emitting, local_coords, interp_to_end.",
+     "node_keys": [
+      "node_path"
+     ],
+     "guard": "edit_particles",
+     "guard_op": "particle_set_main",
+     "effect_key": "particle_manage.set_main"
+    },
+    "particle_set_process": {
+     "upstream": "particle_manage",
+     "op": "set_process",
+     "keys": [
+      "node_path",
+      "properties"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path",
+      "properties"
+     ],
+     "sig": "particle_set_process(node_path*, properties*)",
+     "doc": "• set_process(node_path, properties) Behavior props (auto-creates ProcessMaterial for GPU). Emission shape, velocity, gravity, color_ramp, scale_curve, turbulence. See full property list in the Godot reference. GPU gravity is a Vector3 — pass {x, y, z} or [x, y, z], including for gpu_2d (the shared ProcessMaterial is 3D; z is ignored in 2D).",
+     "node_keys": [
+      "node_path"
+     ],
+     "guard": "edit_particles",
+     "guard_op": "particle_set_process",
+     "effect_key": "particle_manage.set_process"
+    },
+    "particle_set_draw_pass": {
+     "upstream": "particle_manage",
+     "op": "set_draw_pass",
+     "keys": [
+      "node_path",
+      "pass_",
+      "mesh",
+      "texture",
+      "material"
+     ],
+     "any_keys": false,
+     "required": [
+      "node_path"
+     ],
+     "sig": "particle_set_draw_pass(node_path*, pass_, mesh, texture, material)",
+     "doc": "• set_draw_pass(node_path, pass_=1, mesh=\"\", texture=\"\", material=\"\") What gets drawn per particle. GPU 3D: mesh in draw_pass_N + optional material override. GPU 2D / CPU 2D: texture. CPU 3D: mesh.",
+     "node_keys": [
+      "node_path"
+     ],
+     "guard": "edit_particles",
+     "guard_op": "particle_set_draw_pass",
+     "effect_key": "particle_manage.set_draw_pass"
+    },
+    "particle_preset": {
+     "upstream": "particle_manage",
+     "op": "apply_preset",
+     "keys": [
+      "parent_path",
+      "name",
+      "preset",
+      "type",
+      "overrides"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path",
+      "name",
+      "preset"
+     ],
+     "sig": "particle_preset(parent_path*, name*, preset*, type, overrides)",
+     "doc": "• apply_preset(parent_path, name, preset, type=\"gpu_3d\", overrides=None) Curated effects: fire, smoke, spark_burst, magic_swirl, rain, explosion, lightning. One-shot presets re-trigger via restart. overrides = {\"main\": {...}, \"process\": {...}, \"draw\": {...}}; bare keys are auto-routed to main (amount, lifetime, one_shot, ...) or process — draw keys must be nested under \"draw\". draw configures the gpu_3d draw-pass StandardMaterial3D (blend_mode, albedo_color, emission, ...); on gpu_2d only draw.texture (res:// path) applies; cpu_* types reject draw overrides. Unknown or malformed override keys return INVALID_PARAMS (never silently dropped); response reports applied_main / applied_process / applied_draw. GPU gravity requires {x, y, z} (or [x, y, z]) even for gpu_2d.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_particles",
+     "guard_op": "particle_preset",
+     "effect_key": "particle_manage.apply_preset"
+    },
+    "camera_create": {
+     "upstream": "camera_manage",
+     "op": "create",
+     "keys": [
+      "parent_path",
+      "name",
+      "type",
+      "make_current"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path"
+     ],
+     "sig": "camera_create(parent_path*, name, type, make_current)",
+     "doc": "• create(parent_path, name=\"Camera\", type=\"2d\", make_current=False) Create a Camera2D (\"2d\") or Camera3D (\"3d\"). When make_current=True, unmarks previously current cameras of the same class in one undo.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_camera",
+     "guard_op": "camera_create",
+     "effect_key": "camera_manage.create"
+    },
+    "camera_configure": {
+     "upstream": "camera_manage",
+     "op": "configure",
+     "keys": [
+      "camera_path",
+      "properties"
+     ],
+     "any_keys": false,
+     "required": [
+      "camera_path",
+      "properties"
+     ],
+     "sig": "camera_configure(camera_path*, properties*)",
+     "doc": "• configure(camera_path, properties) Batch-set camera-specific properties (zoom, fov, projection, smoothing, drag, limits …). Class-aware. Enum-by-name (projection, keep_aspect, anchor_mode, doppler_tracking, process_callback). Vector2 dict coercion for zoom/offset. Transforms (position, rotation, scale, transform, global_*) live on the Node — set those via node_set_property, not here.",
+     "node_keys": [
+      "camera_path"
+     ],
+     "guard": "edit_camera",
+     "guard_op": "camera_configure",
+     "effect_key": "camera_manage.configure"
+    },
+    "camera_set_limits_2d": {
+     "upstream": "camera_manage",
+     "op": "set_limits_2d",
+     "keys": [
+      "camera_path",
+      "left",
+      "right",
+      "top",
+      "bottom",
+      "smoothed"
+     ],
+     "any_keys": false,
+     "required": [
+      "camera_path"
+     ],
+     "sig": "camera_set_limits_2d(camera_path*, left, right, top, bottom, smoothed)",
+     "doc": "• set_limits_2d(camera_path, left?, right?, top?, bottom?, smoothed?) Set Camera2D bounds. Pass only the edges to change.",
+     "node_keys": [
+      "camera_path"
+     ],
+     "guard": "edit_camera",
+     "guard_op": "camera_set_limits_2d",
+     "effect_key": "camera_manage.set_limits_2d"
+    },
+    "camera_set_damping_2d": {
+     "upstream": "camera_manage",
+     "op": "set_damping_2d",
+     "keys": [
+      "camera_path",
+      "position_speed",
+      "rotation_speed",
+      "drag_margins",
+      "drag_horizontal_enabled",
+      "drag_vertical_enabled"
+     ],
+     "any_keys": false,
+     "required": [
+      "camera_path"
+     ],
+     "sig": "camera_set_damping_2d(camera_path*, position_speed, rotation_speed, drag_margins, drag_horizontal_enabled, drag_vertical_enabled)",
+     "doc": "• set_damping_2d(camera_path, position_speed?, rotation_speed?, drag_margins?, drag_horizontal_enabled?, drag_vertical_enabled?) Smooth Camera2D motion (position/rotation smoothing speeds + drag deadzone). drag_margins: {left,top,right,bottom} fractions [0,1].",
+     "node_keys": [
+      "camera_path"
+     ],
+     "guard": "edit_camera",
+     "guard_op": "camera_set_damping_2d",
+     "effect_key": "camera_manage.set_damping_2d"
+    },
+    "camera_follow_2d": {
+     "upstream": "camera_manage",
+     "op": "follow_2d",
+     "keys": [
+      "camera_path",
+      "target_path",
+      "smoothing_speed",
+      "zero_transform"
+     ],
+     "any_keys": false,
+     "required": [
+      "camera_path",
+      "target_path"
+     ],
+     "sig": "camera_follow_2d(camera_path*, target_path*, smoothing_speed, zero_transform)",
+     "doc": "• follow_2d(camera_path, target_path, smoothing_speed=5.0, zero_transform=True) Reparent camera under target with smoothing — Godot-native follow.",
+     "node_keys": [
+      "camera_path"
+     ],
+     "guard": "edit_camera",
+     "guard_op": "camera_follow_2d",
+     "effect_key": "camera_manage.follow_2d"
+    },
+    "camera_preset": {
+     "upstream": "camera_manage",
+     "op": "apply_preset",
+     "keys": [
+      "parent_path",
+      "name",
+      "preset",
+      "type",
+      "make_current",
+      "overrides"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path",
+      "name",
+      "preset"
+     ],
+     "sig": "camera_preset(parent_path*, name*, preset*, type, make_current, overrides)",
+     "doc": "• apply_preset(parent_path, name, preset, type=None, make_current=True, overrides=None) Spawn with opinionated defaults. Presets: topdown_2d, platformer_2d, cinematic_3d, action_3d. overrides merge over preset values.",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_camera",
+     "guard_op": "camera_preset",
+     "effect_key": "camera_manage.apply_preset"
+    },
+    "csg_create": {
+     "upstream": "csg_manage",
+     "op": "csg_create",
+     "keys": [
+      "parent_path",
+      "name",
+      "shape",
+      "operation"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path"
+     ],
+     "sig": "csg_create(parent_path*, name, shape, operation)",
+     "doc": "• csg_create(parent_path, name=\"\", shape=\"box\", operation=\"union\") Create a CSG shape under a Node3D parent (empty parent_path = scene root). shape: box | sphere | cylinder | torus | polygon. operation: union | intersection | subtraction. Returns: {path, name, shape, operation}",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_csg",
+     "guard_op": "csg_create",
+     "effect_key": "csg_manage.csg_create"
+    },
+    "csg_set_operation": {
+     "upstream": "csg_manage",
+     "op": "csg_set_operation",
+     "keys": [
+      "path",
+      "operation"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "operation"
+     ],
+     "sig": "csg_set_operation(path*, operation*)",
+     "doc": "• csg_set_operation(path, operation) Set the boolean operation of a CSG shape. operation: union | intersection | subtraction. Returns: {operation}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_csg",
+     "guard_op": "csg_set_operation",
+     "effect_key": "csg_manage.csg_set_operation"
+    },
+    "tile_set_cell": {
+     "upstream": "tilemap_manage",
+     "op": "tilemap_set_cell",
+     "keys": [
+      "path",
+      "source_id",
+      "atlas_col",
+      "atlas_row",
+      "map_x",
+      "map_y"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "source_id",
+      "atlas_col",
+      "atlas_row",
+      "map_x",
+      "map_y"
+     ],
+     "sig": "tile_set_cell(path*, source_id*, atlas_col*, atlas_row*, map_x*, map_y*)",
+     "doc": "• tilemap_set_cell(path, source_id, atlas_col, atlas_row, map_x, map_y) Set a single tile at (map_x, map_y). Returns: {map_x, map_y, source_id, atlas_col, atlas_row}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "tile_set_cell",
+     "effect_key": "tilemap_manage.tilemap_set_cell"
+    },
+    "tile_fill_rect": {
+     "upstream": "tilemap_manage",
+     "op": "tilemap_set_cells_rect",
+     "keys": [
+      "path",
+      "source_id",
+      "atlas_col",
+      "atlas_row",
+      "rect_x",
+      "rect_y",
+      "rect_w",
+      "rect_h"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "source_id",
+      "atlas_col",
+      "atlas_row",
+      "rect_x",
+      "rect_y",
+      "rect_w",
+      "rect_h"
+     ],
+     "sig": "tile_fill_rect(path*, source_id*, atlas_col*, atlas_row*, rect_x*, rect_y*, rect_w*, rect_h*)",
+     "doc": "• tilemap_set_cells_rect(path, source_id, atlas_col, atlas_row, rect_x, rect_y, rect_w, rect_h) Fill a rect_w × rect_h region starting at (rect_x, rect_y) with one tile type in a single undo action. Returns: {cells_filled, rect: {x, y, w, h}}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "tile_fill_rect",
+     "effect_key": "tilemap_manage.tilemap_set_cells_rect"
+    },
+    "gridmap_set_item": {
+     "upstream": "gridmap_manage",
+     "op": "gridmap_set_item",
+     "keys": [
+      "path",
+      "item",
+      "map_x",
+      "map_y",
+      "map_z",
+      "orientation"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "item",
+      "map_x",
+      "map_y",
+      "map_z"
+     ],
+     "sig": "gridmap_set_item(path*, item*, map_x*, map_y*, map_z*, orientation)",
+     "doc": "• gridmap_set_item(path, item, map_x, map_y, map_z, orientation=0) Set a single cell item at (map_x, map_y, map_z). item=-1 erases. Returns: {map_x, map_y, map_z, item, orientation}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "gridmap_set_item",
+     "effect_key": "gridmap_manage.gridmap_set_item"
+    },
+    "gridmap_fill": {
+     "upstream": "gridmap_manage",
+     "op": "gridmap_fill",
+     "keys": [
+      "path",
+      "item",
+      "rect_x",
+      "rect_y",
+      "rect_z",
+      "rect_w",
+      "rect_h",
+      "rect_d",
+      "orientation"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "item",
+      "rect_x",
+      "rect_y",
+      "rect_z",
+      "rect_w",
+      "rect_h",
+      "rect_d"
+     ],
+     "sig": "gridmap_fill(path*, item*, rect_x*, rect_y*, rect_z*, rect_w*, rect_h*, rect_d*, orientation)",
+     "doc": "• gridmap_fill(path, item, rect_x, rect_y, rect_z, rect_w, rect_h, rect_d, orientation=0) Fill a rect_w × rect_h × rect_d region starting at (rect_x, rect_y, rect_z) with one item in a single undo action. Returns: {cells_filled, rect: {x, y, z, w, h, d}}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "gridmap_fill",
+     "effect_key": "gridmap_manage.gridmap_fill"
+    },
+    "nav_bake": {
+     "upstream": "navigation_manage",
+     "op": "bake",
+     "keys": [
+      "path",
+      "scene_file",
+      "force_sync"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "nav_bake(path*, scene_file, force_sync)",
+     "doc": "• bake(path, scene_file=\"\", force_sync=True) Bake a 3D region from bounded mesh-only children. Requires NavigationMesh root-children source mode and mesh-instance or both geometry settings. Supports unscripted Node / Node3D containers and MeshInstance3D using plain ArrayMesh, BoxMesh, PlaneMesh, SphereMesh, CylinderMesh or CapsuleMesh. Rejects other source nodes/settings (groups, colliders, CSG, GridMap, obstacles); custom source parser callbacks are never invoked. 2D baking is unsupported. Limits: 256 source nodes, 2048 triangles, 6144 vertices in total, 32 surfaces per ArrayMesh, and 1000000 estimated voxel cells. Source collection advances one bounded node per editor frame, then the engine bakes the collected snapshot asynchronously. These input limits are not a hardware-independent per-frame timing guarantee. Replies are deferred with a 30 s deadline; source edits abort the operation. Cancellation restores the old region resource; an already-started engine task may finish into its detached working copy. parse_ms reports collection time. force_sync=True pushes the result and synchronizes the map; False leaves map synchronization to the engine. Undo/redo restore exact retained resources. Only one bake per region; call directly, not in batch_execute. Resource form: none - per-region write.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "nav_bake",
+     "effect_key": "navigation_manage.bake"
+    },
+    "audio_player_create": {
+     "upstream": "audio_manage",
+     "op": "player_create",
+     "keys": [
+      "parent_path",
+      "name",
+      "type"
+     ],
+     "any_keys": false,
+     "required": [
+      "parent_path"
+     ],
+     "sig": "audio_player_create(parent_path*, name, type)",
+     "doc": "• player_create(parent_path, name=\"AudioStreamPlayer\", type=\"1d\") Create an AudioStreamPlayer / 2D / 3D node. type: \"1d\" | \"2d\" | \"3d\".",
+     "node_keys": [
+      "parent_path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "audio_player_create",
+     "effect_key": "audio_manage.player_create"
+    },
+    "audio_set_stream": {
+     "upstream": "audio_manage",
+     "op": "player_set_stream",
+     "keys": [
+      "player_path",
+      "stream_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "stream_path"
+     ],
+     "sig": "audio_set_stream(player_path*, stream_path*)",
+     "doc": "• player_set_stream(player_path, stream_path) Assign an AudioStream resource (.ogg/.wav/.mp3 or .tres). Returns duration_seconds.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "audio_set_stream",
+     "effect_key": "audio_manage.player_set_stream"
+    },
+    "audio_set_playback": {
+     "upstream": "audio_manage",
+     "op": "player_set_playback",
+     "keys": [
+      "player_path",
+      "volume_db",
+      "pitch_scale",
+      "autoplay",
+      "bus"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "audio_set_playback(player_path*, volume_db, pitch_scale, autoplay, bus)",
+     "doc": "• player_set_playback(player_path, volume_db?, pitch_scale?, autoplay?, bus?) Update common playback properties atomically. Pass only fields to change; at least one of volume_db/pitch_scale/autoplay/bus required.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "audio_set_playback",
+     "effect_key": "audio_manage.player_set_playback"
+    },
+    "audio_play": {
+     "upstream": "audio_manage",
+     "op": "play",
+     "keys": [
+      "player_path",
+      "from_position"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "audio_play(player_path*, from_position)",
+     "doc": "• play(player_path, from_position=0.0) Start real editor preview playback. Not undoable.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "audio_play",
+     "effect_key": "audio_manage.play"
+    },
+    "audio_stop": {
+     "upstream": "audio_manage",
+     "op": "stop",
+     "keys": [
+      "player_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path"
+     ],
+     "sig": "audio_stop(player_path*)",
+     "doc": "• stop(player_path) Stop editor preview playback. Not undoable.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "edit_level",
+     "guard_op": "audio_stop",
+     "effect_key": "audio_manage.stop"
+    },
+    "edit_resources_create": {
+     "upstream": "resource_manage",
+     "op": "create",
+     "keys": [
+      "type",
+      "properties",
+      "path",
+      "property",
+      "resource_path",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "type"
+     ],
+     "sig": "create(type*, properties, path, property, resource_path, overwrite)",
+     "doc": "• create(type, properties=None, path=\"\", property=\"\", resource_path=\"\", overwrite=False) Instantiate a Resource subclass. Either path+property (assign to a node, undoable) or resource_path (save to .tres). For specific families (Curve, Environment, etc.) prefer the dedicated ops.",
+     "node_keys": [
+      "path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_resources",
+     "guard_op": "create",
+     "effect_key": "resource_manage.create"
+    },
+    "assign": {
+     "upstream": "resource_manage",
+     "op": "assign",
+     "keys": [
+      "path",
+      "property",
+      "resource_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path",
+      "property",
+      "resource_path"
+     ],
+     "sig": "assign(path*, property*, resource_path*)",
+     "doc": "• assign(path, property, resource_path) Load and assign a resource to a node property. Undoable.",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_resources",
+     "guard_op": "assign",
+     "effect_key": "resource_manage.assign"
+    },
+    "curve_set_points": {
+     "upstream": "resource_manage",
+     "op": "curve_set_points",
+     "keys": [
+      "points",
+      "path",
+      "property",
+      "resource_path"
+     ],
+     "any_keys": false,
+     "required": [
+      "points"
+     ],
+     "sig": "curve_set_points(points*, path, property, resource_path)",
+     "doc": "• curve_set_points(points, path=\"\", property=\"\", resource_path=\"\") Replace all points on a Curve / Curve2D / Curve3D. Auto-creates the curve resource if the slot is empty (curve_created flag).",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_resources",
+     "guard_op": "curve_set_points",
+     "effect_key": "resource_manage.curve_set_points"
+    },
+    "environment_create": {
+     "upstream": "resource_manage",
+     "op": "environment_create",
+     "keys": [
+      "path",
+      "preset",
+      "properties",
+      "sky",
+      "resource_path",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "environment_create(path, preset, properties, sky, resource_path, overwrite)",
+     "doc": "• environment_create(path=\"\", preset=\"default\", properties=None, sky=None, resource_path=\"\", overwrite=False) Build Environment + Sky chain. Presets: default | clear | sunset | night | fog. sky may be bool or a procedural sky dict such as {\"sky_material\": \"procedural\", \"sky_top_color\": \"#0f172a\"}. Either assign to a WorldEnvironment node or save .tres.",
+     "node_keys": [
+      "path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_resources",
+     "guard_op": "environment_create",
+     "effect_key": "resource_manage.environment_create"
+    },
+    "gradient_texture_create": {
+     "upstream": "resource_manage",
+     "op": "gradient_texture_create",
+     "keys": [
+      "stops",
+      "width",
+      "height",
+      "fill",
+      "path",
+      "property",
+      "resource_path",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "stops"
+     ],
+     "sig": "gradient_texture_create(stops*, width, height, fill, path, property, resource_path, overwrite)",
+     "doc": "• gradient_texture_create(stops, width=256, height=1, fill=\"linear\", path=\"\", property=\"\", resource_path=\"\", overwrite=False) Build GradientTexture2D from color stops. fill: linear | radial | square.",
+     "node_keys": [
+      "path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_resources",
+     "guard_op": "gradient_texture_create",
+     "effect_key": "resource_manage.gradient_texture_create"
+    },
+    "noise_texture_create": {
+     "upstream": "resource_manage",
+     "op": "noise_texture_create",
+     "keys": [
+      "noise_type",
+      "width",
+      "height",
+      "frequency",
+      "seed",
+      "fractal_octaves",
+      "path",
+      "property",
+      "resource_path",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "noise_texture_create(noise_type, width, height, frequency, seed, fractal_octaves, path, property, resource_path, overwrite)",
+     "doc": "• noise_texture_create(noise_type=\"simplex_smooth\", width=512, height=512, frequency=0.01, seed=0, fractal_octaves=0, path=\"\", property=\"\", resource_path=\"\", overwrite=False) Build NoiseTexture2D wrapping FastNoiseLite. Noise types: simplex | simplex_smooth | perlin | cellular | value | value_cubic.",
+     "node_keys": [
+      "path"
+     ],
+     "upstream_overwrite": true,
+     "guard": "edit_resources",
+     "guard_op": "noise_texture_create",
+     "effect_key": "resource_manage.noise_texture_create"
+    },
+    "collision_shape_fit": {
+     "upstream": "resource_manage",
+     "op": "physics_shape_autofit",
+     "keys": [
+      "path",
+      "source_path",
+      "shape_type"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "collision_shape_fit(path*, source_path, shape_type)",
+     "doc": "• physics_shape_autofit(path, source_path=\"\", shape_type=\"\") Size a CollisionShape2D/3D to a nearby visual's bounds. Searches direct siblings then parent-siblings (handles nested Body→Collision layouts). Ambiguous matches return candidate paths in error.data.candidates. Auto-creates the concrete Shape subclass if needed. shape_type accepts either the short form (\"box\", \"sphere\", \"capsule\", \"cylinder\" for 3D; \"rectangle\", \"circle\", \"capsule\" for 2D) or the matching Godot class name (\"BoxShape3D\", \"RectangleShape2D\", etc.).",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "edit_resources",
+     "guard_op": "collision_shape_fit",
+     "effect_key": "resource_manage.physics_shape_autofit"
+    },
+    "collision_shape_generate": {
+     "upstream": "resource_manage",
+     "op": "physics_shape_generate",
+     "keys": [
+      "paths",
+      "shape_type",
+      "body_type",
+      "reparent_mesh",
+      "scene_file",
+      "overwrite"
+     ],
+     "any_keys": false,
+     "required": [
+      "paths"
+     ],
+     "sig": "collision_shape_generate(paths*, shape_type, body_type, reparent_mesh, scene_file, overwrite)",
+     "doc": "• physics_shape_generate(paths, shape_type=\"box\", body_type=\"static\", reparent_mesh=False, scene_file=\"\", overwrite=False) Generate a physics body sibling (named <Mesh>Collider) with a CollisionShape3D for every MeshInstance3D path. Shapes are fitted in body-local space; a mesh that already has a collider sibling, a duplicate path, or a scene-root mesh is refused before anything is written. shape_type: auto | box | sphere | capsule | cylinder | convex | trimesh (or the class name for explicit shapes). Opt-in auto selects matching primitives for BoxMesh, SphereMesh, CapsuleMesh and CylinderMesh, with box bounds for every other mesh. The default remains box. Auto uses bounding fits (including tapered cylinders), not exact mesh geometry. convex/trimesh derive the shape from the mesh's own triangles, with the mesh scale baked into the shape, and are limited to 2048 triangles and 6144 vertices per mesh, with bounded mesh types (the hull build runs synchronously inside one editor-frame item); trimesh needs a static or area body, and a non-uniformly scaled parent chain refuses every type except box. body_type: static | area | rigid | character. rigid/character always wrap the mesh under the generated body (a detached dynamic body would fall away from the stationary visual); reparent_mesh=True does the same for static/area while preserving the mesh's world transform, and the reported mesh_path is then the post-move path. overwrite=True refreshes only a marked generated collider's shape and collision transform, preserving body/collision identity and user settings. Requested body type and wrapping must match; unmarked legacy bodies or broken provenance links are refused. Mixed fresh/refresh batches prepare all resources before one undo action; stale edits refuse the batch. scene_file pins the request to that edited scene. Up to 1024 paths are processed in bounded work across editor frames; inside batch_execute at most 16. The bulk write is one undo action. Returns: {created: [{mesh_path, body_path, shape_path, shape_type, body_type, operation: \"create\"|\"refresh\"}], undoable: true}.",
+     "upstream_overwrite": true,
+     "guard": "edit_resources",
+     "guard_op": "collision_shape_generate",
+     "effect_key": "resource_manage.physics_shape_generate"
+    },
+    "animation": {
+     "upstream": "animation_manage",
+     "op": "delete",
+     "keys": [
+      "player_path",
+      "animation_name"
+     ],
+     "any_keys": false,
+     "required": [
+      "player_path",
+      "animation_name"
+     ],
+     "sig": "animation(player_path*, animation_name*)",
+     "doc": "• delete(player_path, animation_name) Delete an animation clip from the default library. Undoable.",
+     "node_keys": [
+      "player_path"
+     ],
+     "guard": "delete_asset",
+     "guard_op": "animation",
+     "effect_key": "animation_manage.delete"
+    },
+    "tilemap": {
+     "upstream": "tilemap_manage",
+     "op": "tilemap_clear",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "tilemap(path*)",
+     "doc": "• tilemap_clear(path) Remove all tiles from the layer. Returns: {cleared: true}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "delete_asset",
+     "guard_op": "tilemap",
+     "effect_key": "tilemap_manage.tilemap_clear"
+    },
+    "gridmap": {
+     "upstream": "gridmap_manage",
+     "op": "gridmap_clear",
+     "keys": [
+      "path"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "gridmap(path*)",
+     "doc": "• gridmap_clear(path) Remove all cells from the GridMap. Returns: {cleared: true}",
+     "node_keys": [
+      "path"
+     ],
+     "guard": "delete_asset",
+     "guard_op": "gridmap",
+     "effect_key": "gridmap_manage.gridmap_clear"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "material",
+      "shader",
+      "visual_shader",
+      "shader_check",
+      "audio",
+      "tileset_tiles",
+      "tileset_image",
+      "player_create",
+      "create",
+      "create_simple",
+      "add_property_track",
+      "add_method_track",
+      "set_autoplay",
+      "play",
+      "stop",
+      "build_layout",
+      "set_text",
+      "set_richtext",
+      "set_anchor_preset",
+      "draw_recipe",
+      "theme_create",
+      "theme_apply",
+      "theme_set_color",
+      "theme_set_constant",
+      "theme_set_font",
+      "theme_set_font_size",
+      "theme_set_icon",
+      "theme_set_stylebox_flat",
+      "theme_set_stylebox_texture",
+      "theme_stylebox_override",
+      "material_create",
+      "material_set_param",
+      "material_set_shader_param",
+      "material_assign",
+      "material_apply_to_node",
+      "material_apply_preset",
+      "shader_create",
+      "visual_shader_create",
+      "visual_shader_edit",
+      "particle_create",
+      "particle_set_main",
+      "particle_set_process",
+      "particle_set_draw_pass",
+      "particle_preset",
+      "camera_create",
+      "camera_configure",
+      "camera_set_limits_2d",
+      "camera_set_damping_2d",
+      "camera_follow_2d",
+      "camera_preset",
+      "csg_create",
+      "csg_set_operation",
+      "tile_set_cell",
+      "tile_fill_rect",
+      "gridmap_set_item",
+      "gridmap_fill",
+      "nav_bake",
+      "audio_player_create",
+      "audio_set_stream",
+      "audio_set_playback",
+      "audio_play",
+      "audio_stop",
+      "edit_resources_create",
+      "assign",
+      "curve_set_points",
+      "environment_create",
+      "gradient_texture_create",
+      "noise_texture_create",
+      "collision_shape_fit",
+      "collision_shape_generate",
+      "animation",
+      "tilemap",
+      "gridmap"
+     ],
+     "description": "Operation name. The enum lists every op."
+    },
+    "path": {
+     "description": "Used by: material, shader, visual_shader, tiles, gridmap_cells, gridmap_items."
+    },
+    "root": {
+     "description": "Used by: materials, audio."
+    },
+    "type": {
+     "description": "Used by: materials."
+    },
+    "code": {
+     "description": "Used by: shader_check."
+    },
+    "kind": {
+     "description": "Used by: shader_check."
+    },
+    "shader_type": {
+     "description": "Used by: shader_check."
+    },
+    "base_dir": {
+     "description": "Used by: shader_check."
+    },
+    "player_path": {
+     "description": "Used by: animation, animations, animation_check."
+    },
+    "animation_name": {
+     "description": "Used by: animation, animation_check."
+    },
+    "include_duration": {
+     "description": "Used by: audio."
+    },
+    "camera_path": {
+     "description": "Used by: camera."
+    },
+    "node_path": {
+     "description": "Used by: particles."
+    },
+    "tileset_path": {
+     "description": "Used by: tileset_tiles, tileset_image."
+    },
+    "source_id": {
+     "description": "Used by: tileset_tiles, tileset_image."
+    },
+    "max_size": {
+     "description": "Used by: tileset_image."
+    },
+    "from_point": {
+     "description": "Used by: nav_path."
+    },
+    "to_point": {
+     "description": "Used by: nav_path."
+    },
+    "dimension": {
+     "description": "Used by: nav_path."
+    },
+    "optimize": {
+     "description": "Used by: nav_path."
+    },
+    "navigation_layers": {
+     "description": "Used by: nav_path."
+    },
+    "region_path": {
+     "description": "Used by: nav_path."
+    },
+    "force_sync": {
+     "description": "Used by: nav_path."
+    },
+    "parent_path": {
+     "description": "Used by: player_create."
+    },
+    "name": {
+     "description": "Used by: player_create, create, create_simple."
+    },
+    "length": {
+     "description": "Used by: create, create_simple."
+    },
+    "loop_mode": {
+     "description": "Used by: create, create_simple."
+    },
+    "overwrite": {
+     "description": "Used by: create, create_simple, preset_fade, preset_slide, preset_shake, preset_pulse."
+    },
+    "tweens": {
+     "description": "Used by: create_simple."
+    },
+    "track_path": {
+     "description": "Used by: add_property_track."
+    },
+    "keyframes": {
+     "description": "Used by: add_property_track, add_method_track."
+    },
+    "interpolation": {
+     "description": "Used by: add_property_track."
+    },
+    "target_node_path": {
+     "description": "Used by: add_method_track."
+    },
+    "target_path": {
+     "description": "Used by: preset_fade, preset_slide, preset_shake, preset_pulse."
+    },
+    "mode": {
+     "description": "Used by: preset_fade, preset_slide."
+    },
+    "duration": {
+     "description": "Used by: preset_fade, preset_slide, preset_shake, preset_pulse."
+    },
+    "direction": {
+     "description": "Used by: preset_slide."
+    },
+    "distance": {
+     "description": "Used by: preset_slide."
+    },
+    "intensity": {
+     "description": "Used by: preset_shake."
+    },
+    "frequency": {
+     "description": "Used by: preset_shake."
+    },
+    "seed": {
+     "description": "Used by: preset_shake."
+    },
+    "from_scale": {
+     "description": "Used by: preset_pulse."
+    },
+    "to_scale": {
+     "description": "Used by: preset_pulse."
+    },
+    "tree": {
+     "description": "Used by: build_layout."
+    },
+    "text": {
+     "description": "Used by: set_text, set_richtext."
+    },
+    "bbcode": {
+     "description": "Used by: set_richtext."
+    },
+    "preset": {
+     "description": "Used by: set_anchor_preset."
+    },
+    "resize_mode": {
+     "description": "Used by: set_anchor_preset."
+    },
+    "margin": {
+     "description": "Used by: set_anchor_preset."
+    },
+    "ops": {
+     "description": "Used by: draw_recipe."
+    },
+    "clear_existing": {
+     "description": "Used by: draw_recipe."
+    },
+    "theme_path": {
+     "description": "Used by: theme_apply, theme_set_color, theme_set_constant, theme_set_font, theme_set_font_size, theme_set_icon, theme_set_stylebox_flat, theme_set_stylebox_texture."
+    },
+    "class_name": {
+     "description": "Used by: theme_set_color, theme_set_constant, theme_set_font, theme_set_font_size, theme_set_icon, theme_set_stylebox_flat, theme_set_stylebox_texture."
+    },
+    "value": {
+     "description": "Used by: theme_set_color, theme_set_constant, theme_set_font_size."
+    },
+    "font_path": {
+     "description": "Used by: theme_set_font."
+    },
+    "texture_path": {
+     "description": "Used by: theme_set_icon, theme_set_stylebox_texture."
+    },
+    "bg_color": {
+     "description": "Used by: theme_set_stylebox_flat."
+    },
+    "border_color": {
+     "description": "Used by: theme_set_stylebox_flat."
+    },
+    "border": {
+     "description": "Used by: theme_set_stylebox_flat."
+    },
+    "corners": {
+     "description": "Used by: theme_set_stylebox_flat."
+    },
+    "margins": {
+     "description": "Used by: theme_set_stylebox_flat, theme_set_stylebox_texture."
+    },
+    "shadow": {
+     "description": "Used by: theme_set_stylebox_flat."
+    },
+    "anti_aliasing": {
+     "description": "Used by: theme_set_stylebox_flat."
+    },
+    "region": {
+     "description": "Used by: theme_set_stylebox_texture."
+    },
+    "axis_stretch_horizontal": {
+     "description": "Used by: theme_set_stylebox_texture."
+    },
+    "axis_stretch_vertical": {
+     "description": "Used by: theme_set_stylebox_texture."
+    },
+    "modulate_color": {
+     "description": "Used by: theme_set_stylebox_texture."
+    },
+    "draw_center": {
+     "description": "Used by: theme_set_stylebox_texture."
+    },
+    "slot": {
+     "description": "Used by: theme_stylebox_override."
+    },
+    "patch": {
+     "description": "Used by: theme_stylebox_override."
+    },
+    "param": {
+     "description": "Used by: material_set_param, material_set_shader_param."
+    },
+    "resource_path": {
+     "description": "Used by: material_assign, shader_create, visual_shader_create, visual_shader_edit."
+    },
+    "overrides": {
+     "description": "Used by: material_apply_preset, particle_preset, camera_preset."
+    },
+    "properties": {
+     "description": "Used by: particle_set_main, particle_set_process, camera_configure."
+    },
+    "make_current": {
+     "description": "Used by: camera_create, camera_preset."
+    },
+    "operation": {
+     "description": "Used by: csg_create, csg_set_operation."
+    },
+    "atlas_col": {
+     "description": "Used by: tile_set_cell, tile_fill_rect."
+    },
+    "atlas_row": {
+     "description": "Used by: tile_set_cell, tile_fill_rect."
+    },
+    "map_x": {
+     "description": "Used by: tile_set_cell, gridmap_set_item."
+    },
+    "map_y": {
+     "description": "Used by: tile_set_cell, gridmap_set_item."
+    },
+    "rect_x": {
+     "description": "Used by: tile_fill_rect, gridmap_fill."
+    },
+    "rect_y": {
+     "description": "Used by: tile_fill_rect, gridmap_fill."
+    },
+    "rect_w": {
+     "description": "Used by: tile_fill_rect, gridmap_fill."
+    },
+    "rect_h": {
+     "description": "Used by: tile_fill_rect, gridmap_fill."
+    },
+    "item": {
+     "description": "Used by: gridmap_set_item, gridmap_fill."
+    },
+    "map_z": {
+     "description": "Used by: gridmap_set_item."
+    },
+    "orientation": {
+     "description": "Used by: gridmap_set_item, gridmap_fill."
+    },
+    "rect_z": {
+     "description": "Used by: gridmap_fill."
+    },
+    "rect_d": {
+     "description": "Used by: gridmap_fill."
+    },
+    "scene_file": {
+     "description": "Used by: nav_bake."
+    },
+    "stream_path": {
+     "description": "Used by: audio_set_stream."
+    },
+    "volume_db": {
+     "description": "Used by: audio_set_playback."
+    },
+    "pitch_scale": {
+     "description": "Used by: audio_set_playback."
+    },
+    "autoplay": {
+     "description": "Used by: audio_set_playback."
+    },
+    "bus": {
+     "description": "Used by: audio_set_playback."
+    },
+    "from_position": {
+     "description": "Used by: audio_play."
+    },
+    "property": {
+     "description": "Used by: create, assign, curve_set_points, gradient_texture_create, noise_texture_create."
+    },
+    "points": {
+     "description": "Used by: curve_set_points."
+    },
+    "sky": {
+     "description": "Used by: environment_create."
+    },
+    "stops": {
+     "description": "Used by: gradient_texture_create."
+    },
+    "width": {
+     "description": "Used by: gradient_texture_create, noise_texture_create."
+    },
+    "height": {
+     "description": "Used by: gradient_texture_create, noise_texture_create."
+    },
+    "fill": {
+     "description": "Used by: gradient_texture_create."
+    },
+    "noise_type": {
+     "description": "Used by: noise_texture_create."
+    },
+    "fractal_octaves": {
+     "description": "Used by: noise_texture_create."
+    },
+    "source_path": {
+     "description": "Used by: collision_shape_fit."
+    },
+    "shape_type": {
+     "description": "Used by: collision_shape_fit, collision_shape_generate."
+    },
+    "paths": {
+     "description": "Used by: collision_shape_generate."
+    },
+    "body_type": {
+     "description": "Used by: collision_shape_generate."
+    },
+    "reparent_mesh": {
+     "description": "Used by: collision_shape_generate."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "game_do",
+   "tier": "change",
+   "description": "Play a Godot game, send input, or run GDScript in it. Asks the user for approval every time. Ops: scene_tree, node, ui, debug, input, key, mouse, gamepad, action, sequence, suspend, resume, next_frame, run_game_code, play_session.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "scene_tree": {
+     "upstream": "game_manage",
+     "op": "get_scene_tree",
+     "keys": [
+      "depth",
+      "root_path"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "scene_tree(depth, root_path)",
+     "doc": "- get_scene_tree(depth=10, root_path=\"\") Inspect the running scene tree. root_path accepts an absolute runtime path or a scene-relative path rooted at the current scene.",
+     "guard": "read_game",
+     "guard_op": "scene_tree",
+     "effect_key": "game_manage.get_scene_tree"
+    },
+    "node": {
+     "upstream": "game_manage",
+     "op": "get_node_info",
+     "keys": [
+      "path",
+      "include_properties"
+     ],
+     "any_keys": false,
+     "required": [
+      "path"
+     ],
+     "sig": "node(path*, include_properties)",
+     "doc": "- get_node_info(path, include_properties=True) Inspect one running node's metadata and optional property snapshot.",
+     "guard": "read_game",
+     "guard_op": "node",
+     "effect_key": "game_manage.get_node_info"
+    },
+    "ui": {
+     "upstream": "game_manage",
+     "op": "get_ui_elements",
+     "keys": [
+      "root_path",
+      "include_hidden",
+      "include_disabled",
+      "max_depth"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "ui(root_path, include_hidden, include_disabled, max_depth)",
+     "doc": "- get_ui_elements(root_path=\"\", include_hidden=False, include_disabled=True, max_depth=10) Inspect visible runtime Control nodes for UI testing. Includes path, type, text where present, disabled state, and rect metadata.",
+     "guard": "read_game",
+     "guard_op": "ui",
+     "effect_key": "game_manage.get_ui_elements"
+    },
+    "debug": {
+     "upstream": "game_manage",
+     "op": "debug_status",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "debug()",
+     "doc": "- debug_status() Probe suspend state and the game-helper process tick counter through the debugger capture, including while SceneTree processing is suspended.",
+     "guard": "read_game",
+     "guard_op": "debug",
+     "effect_key": "game_manage.debug_status"
+    },
+    "input": {
+     "upstream": "game_manage",
+     "op": "input_state",
+     "keys": [
+      "actions"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "input(actions)",
+     "doc": "- input_state(actions=None) Read current action pressed states. Empty actions = all project actions.",
+     "guard": "read_game",
+     "guard_op": "input",
+     "effect_key": "game_manage.input_state"
+    },
+    "key": {
+     "upstream": "game_manage",
+     "op": "input_key",
+     "keys": [
+      "key",
+      "pressed",
+      "echo"
+     ],
+     "any_keys": false,
+     "required": [
+      "key"
+     ],
+     "sig": "key(key*, pressed, echo)",
+     "doc": "- input_key(key, pressed=True, echo=False) Send a key press/release to the running game.",
+     "guard": "game_input",
+     "guard_op": "key",
+     "effect_key": "game_manage.input_key"
+    },
+    "mouse": {
+     "upstream": "game_manage",
+     "op": "input_mouse",
+     "keys": [
+      "event",
+      "position",
+      "button",
+      "pressed"
+     ],
+     "any_keys": false,
+     "required": [
+      "event"
+     ],
+     "sig": "mouse(event*, position, button, pressed)",
+     "doc": "- input_mouse(event, position=None, button=\"left\", pressed=True) Send a mouse motion or button event. event: \"motion\" | \"button\". position is a {x, y} object or [x, y] array; omit it to use the game's current cursor position. A present but malformed position is rejected rather than silently falling back to the cursor.",
+     "guard": "game_input",
+     "guard_op": "mouse",
+     "effect_key": "game_manage.input_mouse"
+    },
+    "gamepad": {
+     "upstream": "game_manage",
+     "op": "input_gamepad",
+     "keys": [
+      "device",
+      "control",
+      "index",
+      "pressed",
+      "value"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "gamepad(device, control, index, pressed, value)",
+     "doc": "- input_gamepad(device=0, control=\"button\", index=0, pressed=True, value=0.0) Send a joypad button or axis event. control: \"button\" | \"axis\".",
+     "guard": "game_input",
+     "guard_op": "gamepad",
+     "effect_key": "game_manage.input_gamepad"
+    },
+    "action": {
+     "upstream": "game_manage",
+     "op": "input_action",
+     "keys": [
+      "action",
+      "pressed",
+      "strength"
+     ],
+     "any_keys": false,
+     "required": [
+      "action"
+     ],
+     "sig": "action(action*, pressed, strength)",
+     "doc": "- input_action(action, pressed=True, strength=1.0) Set a project action's pressed state directly in the running game.",
+     "guard": "game_input",
+     "guard_op": "action",
+     "effect_key": "game_manage.input_action"
+    },
+    "sequence": {
+     "upstream": "game_manage",
+     "op": "input_sequence",
+     "keys": [
+      "steps",
+      "settle_frames"
+     ],
+     "any_keys": false,
+     "required": [
+      "steps"
+     ],
+     "sig": "sequence(steps*, settle_frames)",
+     "doc": "- input_sequence(steps, settle_frames=0) Apply a frame-timed action timeline in one call — the frame-accurate, multi-step form of input_action. Each step is {at_frame, action, pressed=True, strength=1.0}; the game applies each step's action on its scheduled frame, awaits settle_frames more, then replies once. Use this instead of separate input_action calls whenever timing matters (jump arcs, combos, walk-into-trigger): per-call network latency makes hitting a target frame impossible otherwise. Steps must be ordered by non-decreasing at_frame; frames (not ms) are the timing basis. Action-based input is focus-independent, so it works on a backgrounded game window. Cannot run inside batch_execute.",
+     "guard": "game_input",
+     "guard_op": "sequence",
+     "effect_key": "game_manage.input_sequence"
+    },
+    "suspend": {
+     "upstream": "game_manage",
+     "op": "suspend",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "suspend()",
+     "doc": "- suspend() Suspend the running game through Godot's native debugger path.",
+     "guard": "game_input",
+     "guard_op": "suspend",
+     "effect_key": "game_manage.suspend"
+    },
+    "resume": {
+     "upstream": "game_manage",
+     "op": "resume",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "resume()",
+     "doc": "- resume() Resume a suspended game. Idempotent when it is already running.",
+     "guard": "game_input",
+     "guard_op": "resume",
+     "effect_key": "game_manage.resume"
+    },
+    "next_frame": {
+     "upstream": "game_manage",
+     "op": "next_frame",
+     "keys": [],
+     "any_keys": false,
+     "required": [],
+     "sig": "next_frame()",
+     "doc": "- next_frame() Advance exactly one process tick while suspended. The response reports verification and any Embedded Game View focus handoff. Runtime-control mutations also report path=\"embed_signal\" or \"direct_session\"; the direct fallback works without embedding but cannot synchronize the Game View suspend button's visual pressed state.",
+     "guard": "game_input",
+     "guard_op": "next_frame",
+     "effect_key": "game_manage.next_frame"
+    },
+    "run_game_code": {
+     "upstream": "editor_manage",
+     "op": "game_eval",
+     "keys": [
+      "code"
+     ],
+     "any_keys": false,
+     "required": [
+      "code"
+     ],
+     "sig": "eval(code*)",
+     "doc": "• game_eval(code) Execute GDScript in the running game with return values. Uses 'await' so user code can await internally. Errors return fast and actionable: EVAL_COMPILE_ERROR for a syntax/parse error, EVAL_RUNTIME_ERROR (with the real message + line) for a runtime error; EVAL_GAME_NOT_READY if the game can't service evals — still launching (retry once it's up), the _mcp_game_helper autoload is missing/disabled, its main loop is not advancing (focus the game), or its debugger session closed; EVAL_HUNG for a live game's genuine infinite loop / never-firing await; EVAL_RESULT_TOO_LARGE if the returned value serializes past the debugger channel's capacity (return a smaller slice).",
+     "guard": "run_game_code",
+     "guard_op": "eval",
+     "effect_key": "editor_manage.game_eval"
+    },
+    "play_session": {
+     "upstream": "@local",
+     "op": null,
+     "keys": [
+      "goal",
+      "steps",
+      "watch",
+      "mode",
+      "scene",
+      "autosave",
+      "idle_seconds",
+      "fall_dy"
+     ],
+     "any_keys": false,
+     "required": [
+      "goal",
+      "steps"
+     ],
+     "sig": "run(goal*, steps*, watch, mode, scene, autosave, idle_seconds, fall_dy)",
+     "doc": "Play the open Godot project and report what went wrong. Stops a game that is already running, runs mode main (default), current or custom (needs scene), with autosave false unless set, reads where the watched nodes start, sends each step (op action, key or wait; action is an input-map name such as ui_right or jump; seconds is 0 to 2 and the steps add up to at most 12), then releases that key or action, watches up to 8 runtime paths, then stops. A goal that compares score (score >= 3) adds the nodes that hold score in that scene to watch when the plan is made. Findings are error (with file, line and the code line when Godot names one), fall, stall, frame_drop, idle, unwatched and goal, each with repro steps. ok true means positions were watched, the goal was judged and met, and there is no error, fall or stall finding; idle and frame_drop findings can still be listed. ok false with goal_not_checked means the goal names neither a score comparison nor a node path; position_unwatched means watch was empty; not_live means the game did not report in and no findings were invented. Mouse, gamepad and sequence are other game_do ops.",
+     "guard": "play_session",
+     "guard_op": "run",
+     "effect_key": "@local.play_session"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "scene_tree",
+      "node",
+      "ui",
+      "debug",
+      "input",
+      "key",
+      "mouse",
+      "gamepad",
+      "action",
+      "sequence",
+      "suspend",
+      "resume",
+      "next_frame",
+      "run_game_code",
+      "play_session"
+     ],
+     "description": "Operation. One of: scene_tree, node, ui, debug, input, key, mouse, gamepad, action, sequence, suspend, resume, next_frame, run_game_code, play_session."
+    },
+    "depth": {
+     "description": "Used by: scene_tree."
+    },
+    "root_path": {
+     "description": "Used by: scene_tree, ui."
+    },
+    "path": {
+     "description": "Used by: node."
+    },
+    "include_properties": {
+     "description": "Used by: node."
+    },
+    "include_hidden": {
+     "description": "Used by: ui."
+    },
+    "include_disabled": {
+     "description": "Used by: ui."
+    },
+    "max_depth": {
+     "description": "Used by: ui."
+    },
+    "actions": {
+     "description": "Used by: input."
+    },
+    "key": {
+     "description": "Used by: key."
+    },
+    "pressed": {
+     "description": "Used by: key, mouse, gamepad, action."
+    },
+    "echo": {
+     "description": "Used by: key."
+    },
+    "event": {
+     "description": "Used by: mouse."
+    },
+    "position": {
+     "description": "Used by: mouse."
+    },
+    "button": {
+     "description": "Used by: mouse."
+    },
+    "device": {
+     "description": "Used by: gamepad."
+    },
+    "control": {
+     "description": "Used by: gamepad."
+    },
+    "index": {
+     "description": "Used by: gamepad."
+    },
+    "value": {
+     "description": "Used by: gamepad."
+    },
+    "action": {
+     "description": "Used by: action."
+    },
+    "strength": {
+     "description": "Used by: action."
+    },
+    "steps": {
+     "description": "Used by: sequence."
+    },
+    "settle_frames": {
+     "description": "Used by: sequence."
+    },
+    "code": {
+     "description": "About this call, from Godot AI: • game_eval(code) Execute GDScript in the running game with return values. Uses 'await' so user code can await internally. Errors return fast and actionable: EVAL_COMPILE_ERROR for a syntax/parse error, EVAL_RUNTIME_ERROR (with the real message + line) for a runtime error; EVAL_GAME_NOT_READY if the game can't service evals — still launching (retry once it's up), the _mcp_game_helper autoload is missing/disabled, its main loop is not advancing (focus the game), or its debugger session closed; EVAL_HUNG for a live game's genuine infinite loop / never-firing await; EVAL_RESULT_TOO_LARGE if the returned value serializes past the debugger channel's capacity (return a smaller slice)."
+    },
+    "goal": {
+     "type": "string",
+     "description": "One sentence of what to look for, 240 characters or fewer."
+    },
+    "watch": {
+     "type": "array",
+     "maxItems": 8,
+     "description": "Up to 8 runtime node paths starting with /, such as /root/World/Actor. Empty watch does not mean nothing fell.",
+     "items": {
+      "type": "string"
+     }
+    },
+    "mode": {
+     "type": "string",
+     "enum": [
+      "main",
+      "current",
+      "custom"
+     ],
+     "description": "main (default), current or custom."
+    },
+    "scene": {
+     "type": "string",
+     "description": "res:// scene path. Required when mode is custom."
+    },
+    "autosave": {
+     "type": "boolean",
+     "description": "Save every open scene before playing. Default false, so the game runs the files on disk."
+    },
+    "idle_seconds": {
+     "type": "number",
+     "description": "A move held at least this long (0.4 to 3, default 1.2) with almost no movement is reported as idle."
+    },
+    "fall_dy": {
+     "type": "number",
+     "description": "Vertical move of a watched node (40 to 2000, default 120) reported as a fall when x barely moves."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "checks",
+   "tier": "destructive",
+   "description": "Run Godot GUT, gdUnit4 or Godot AI test suites. Asks the user for approval every time. Ops: godot_ai, gut, gdunit4.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "godot_ai": {
+     "upstream": "test_run",
+     "op": null,
+     "keys": [
+      "suite",
+      "test_name",
+      "exclude_test_name",
+      "verbose"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "godot_ai(suite, test_name, exclude_test_name, verbose)",
+     "doc": "Run GDScript test suites inside the connected Godot editor. Discovers test_*.gd in res://tests/, instantiates them, and runs all test_* methods. Returns a compact summary by default (counts, suite names, duration) plus failures only. verbose=True includes every individual test result (each with per-test ``duration_ms``). Preloaded GDScript dependencies may remain stale after source edits; the response includes cache_warning. Restart the editor before using a rerun to validate dependency edits. ResourceLoader cache modes alone do not refresh the GDScript preload cache. The whole run has a 300s budget; the plugin aborts between tests shortly before it expires and returns TEST_RUN_TIMEOUT with the partial summary (full partials via test_manage(op=\"results_get\")). Long suites are safe — the editor services the MCP transport between tests — but one single test blocking the main thread for 20s+ can still drop the session. Not allowed inside batch_execute. The response includes ``edited_scene`` (the scene currently open in the editor). Many suites assume the project's main scene is open; if it is not and there are failures, the response also carries a ``scene_warning`` — open the main scene (``scene_open``) and re-run before treating those failures as real.",
+     "guard": "run_tests",
+     "guard_op": "godot_ai",
+     "effect_key": "test_run"
+    },
+    "gut": {
+     "upstream": "@cli",
+     "op": "gut",
+     "keys": [
+      "suite",
+      "test_name",
+      "dirs"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "gut(suite, test_name, dirs)",
+     "doc": "Runs GUT in a separate headless Godot on the project: godot --headless -s res://addons/gut/gut_cmdln.gd -gexit, with -gdir set to dirs (default res://test and res://tests) unless .gutconfig.json exists. suite filters scripts (-gselect), test_name filters tests (-gunit_test_name). Needs addons/gut.",
+     "guard": "run_tests",
+     "guard_op": "gut",
+     "effect_key": "@cli.gut"
+    },
+    "gdunit4": {
+     "upstream": "@cli",
+     "op": "gdunit4",
+     "keys": [
+      "suite",
+      "test_name",
+      "dirs"
+     ],
+     "any_keys": false,
+     "required": [],
+     "sig": "gdunit4(suite, test_name, dirs)",
+     "doc": "Runs gdUnit4 in a separate headless Godot on the project: godot --headless -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a <dir> for each of dirs (default res://test and res://tests). Needs addons/gdUnit4.",
+     "guard": "run_tests",
+     "guard_op": "gdunit4",
+     "effect_key": "@cli.gdunit4"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "godot_ai",
+      "gut",
+      "gdunit4"
+     ],
+     "description": "Operation. One of: godot_ai, gut, gdunit4."
+    },
+    "suite": {
+     "description": "Used by: godot_ai, gut, gdunit4."
+    },
+    "test_name": {
+     "description": "Used by: godot_ai, gut, gdunit4."
+    },
+    "exclude_test_name": {
+     "description": "Used by: godot_ai."
+    },
+    "verbose": {
+     "description": "Used by: godot_ai."
+    },
+    "dirs": {
+     "description": "Used by: gut, gdunit4."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "batch",
+   "tier": "destructive",
+   "description": "Apply several Godot scene edits in one approval. Asks the user for approval every time. The approval shows every command and its values. delete_node and detach_script are included. File writes are not.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "batch_execute": {
+     "upstream": "batch_execute",
+     "op": null,
+     "keys": [
+      "commands",
+      "undo"
+     ],
+     "any_keys": false,
+     "required": [
+      "commands"
+     ],
+     "sig": "batch(commands*, undo)",
+     "doc": "Execute a list of editor sub-commands in order, stopping on first error. Each item must be `{\"command\": \"<plugin_command>\", \"params\": {...}}`. Use the underlying plugin command names (e.g. `create_node`, `set_property`, `attach_script`), not the MCP tool names. Commands run sequentially; execution stops at the first error. When `undo` is True (default), any successful sub-commands are rolled back via the scene's undo history if a later sub-command fails, producing atomic-on-failure semantics. Use this to compose multi-step edits (create node + set property + attach script) into a single tool call. Rollback works for sub-commands that modify the currently edited scene. `batch_execute` itself is not allowed as a sub-command. Scene paths are relative to the edited scene root (e.g. \"/Main/Enemy\"), NOT runtime \"/root/...\" paths. The example below assumes the scene root is named \"Main\" — substitute the actual root name. This bridge runs delete_node and detach_script in the batch and shows every command in the one approval. A command that writes a file is refused here.",
+     "guard": "batch_execute",
+     "guard_op": "batch",
+     "effect_key": "batch_execute"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "batch_execute"
+     ],
+     "description": "Operation. One of: batch_execute."
+    },
+    "commands": {
+     "items": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "type": "array",
+     "description": "List of {\"command\": name, \"params\": {...}} shown together in one approval. Scene edits include create_node, set_property, delete_node and detach_script. A command that writes a file (write_file and anything else that touches disk) is refused here; call file_do or script_do so the overwrite check runs. An unknown command is refused. undo true (default) rolls the scene back if one edit fails."
+    },
+    "undo": {
+     "default": true,
+     "type": "boolean",
+     "description": "Roll back succeeded sub-commands on failure. Default True."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  {
+   "name": "ship_build",
+   "tier": "change",
+   "description": "Export a local Godot build for macOS, Web, Android or iOS. Asks the user for approval every time. Ops: export_game.",
+   "default_op": null,
+   "multi": true,
+   "ops": {
+    "export_game": {
+     "upstream": "@local",
+     "op": null,
+     "keys": [
+      "platform",
+      "output",
+      "debug",
+      "serve",
+      "overwrite",
+      "android_sdk"
+     ],
+     "any_keys": false,
+     "required": [
+      "platform"
+     ],
+     "sig": "export(platform*, output, debug, serve, overwrite, android_sdk)",
+     "doc": "Export the open Godot project on this computer. platform is web, macos, android or ios. debug defaults to true (godot --headless --export-debug; false uses --export-release). output defaults to build/web/index.html, build/macos/Game.app, build/android/game.apk or build/ios/game and must stay inside the project; an existing file needs overwrite true. A preset named Web, macOS, Android or iOS is added to export_presets.cfg only when that platform has none; passwords, team ids and export_credentials.cfg are not written or read. Android sets gradle_build/use_gradle_build=false and permissions/internet=false and needs an Android SDK folder that contains platform-tools (pass android_sdk, or the usual folder). If the export templates for this Godot version are not installed, the reply is export_templates_missing and names the file, the source and the size; nothing is downloaded and nothing is written. serve true (web only) opens the web build on 127.0.0.1 and uploads nothing. iOS writes an Xcode project and does not run altool.",
+     "guard": "export_game",
+     "guard_op": "export",
+     "effect_key": "@local.export_game"
+    }
+   },
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "export_game"
+     ],
+     "description": "Operation. One of: export_game."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "web",
+      "macos",
+      "android",
+      "ios"
+     ],
+     "description": "web, macos, android or ios."
+    },
+    "output": {
+     "type": "string",
+     "description": "Build path inside the project. Default build/web/index.html, build/macos/Game.app, build/android/game.apk or build/ios/game."
+    },
+    "debug": {
+     "type": "boolean",
+     "description": "Debug export. Default true. false is a release export. Neither is uploaded."
+    },
+    "serve": {
+     "type": "boolean",
+     "description": "After a successful web export, serve that folder on 127.0.0.1. Default false. Not for android or ios."
+    },
+    "overwrite": {
+     "type": "boolean",
+     "description": "Replace an output that already exists. Default false."
+    },
+    "android_sdk": {
+     "type": "string",
+     "description": "Absolute path of an Android SDK folder that contains platform-tools. Used for android only. Nothing is downloaded."
+    }
+   },
+   "required": [
+    "op"
+   ]
+  }
+ ],
+ "left_out": [
+  {
+   "upstream": "client_manage",
+   "op": "configure",
+   "why": "Writes another AI client's MCP settings. For Hermes it adds a second godot-ai server with no approval, which would let the model remove this plugin's approval. This plugin is already the connection."
+  },
+  {
+   "upstream": "client_manage",
+   "op": "remove",
+   "why": "Removes AI client settings; same reason as configure."
+  },
+  {
+   "upstream": "editor_manage",
+   "op": "state",
+   "why": "Same handler as editor_state, which editor_look op state reaches."
+  },
+  {
+   "upstream": "client_manage",
+   "op": "status",
+   "why": "Reads the MCP settings of about thirty other AI clients and runs some of their command-line tools (for example `claude mcp list`) to check them; not needed to use this plugin."
+  },
+  {
+   "upstream": "custom_manage",
+   "op": "invoke",
+   "why": "The add-on tool body is not in the Godot AI source, so this plugin cannot tell whether the call runs code, writes, deletes or sends data. It is not offered."
+  }
+ ],
+ "counts": {
+  "tools": 16,
+  "upstream_ops": 161,
+  "upstream_single_call_tools": 19,
+  "reachable": 178
+ }
+}

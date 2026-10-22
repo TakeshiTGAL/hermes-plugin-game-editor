@@ -1,0 +1,42 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "game-editor": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--isolated",
+        "--no-config",
+        "--no-env-file",
+        "--no-sources",
+        "--no-build",
+        "--index-strategy",
+        "first-index",
+        "--keyring-provider",
+        "disabled",
+        "--index",
+        "https://pypi.org/simple",
+        "--default-index",
+        "https://pypi.org/simple",
+        "--find-links",
+        "https://pypi.org/simple/godot-ai/",
+        "--link-mode",
+        "copy",
+        "--python",
+        "3.11",
+        "--with-requirements",
+        "${PLUGIN_ROOT}/godot-ai.lock",
+        "--from",
+        "godot-ai==4.3.0",
+        "python",
+        "-I",
+        "${PLUGIN_ROOT}/bridge/game_editor_bridge.py"
+      ],
+      "env": {
+        "GODOT_AI_DISABLE_TELEMETRY": "true",
+        "FASTMCP_CHECK_FOR_UPDATES": "off"
+      },
+      "cwd": "${PLUGIN_DATA}/work"
+    }
+  }
+}

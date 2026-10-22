@@ -1,0 +1,5896 @@
+{
+ "upstream": "godot-ai==4.3.0",
+ "source": "godot-ai 4.3.0 plugin and Python tools",
+ "by_command": {
+  "get_editor_state": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:get_editor_state",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_editor_state"
+   ],
+   "family": "editor_contact"
+  },
+  "get_scene_tree": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:get_scene_tree",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:get_scene_tree"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "family": "editor_contact"
+  },
+  "get_open_scenes": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:get_open_scenes",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:get_open_scenes"
+   ],
+   "family": "editor_contact"
+  },
+  "find_nodes": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:find_nodes",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:find_nodes"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "family": "editor_contact"
+  },
+  "create_scene": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:create_scene",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:create_scene"
+   ],
+   "side_effects": [
+    "instantiates_scene",
+    "opens_scene",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "open_scene": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:open_scene",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:open_scene"
+   ],
+   "side_effects": [
+    "opens_scene",
+    "reloads_scene_from_disk"
+   ],
+   "family": "editor_contact"
+  },
+  "save_scene": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:save_scene",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:save_scene"
+   ],
+   "node_access": {
+    "reads": [
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "saves_scene"
+   ],
+   "family": "mutation"
+  },
+  "save_scene_as": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/scene_handler.gd:save_scene_as",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:save_scene_as"
+   ],
+   "side_effects": [
+    "saves_scene"
+   ],
+   "family": "mutation"
+  },
+  "get_selection": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:get_selection",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_selection"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "create_node": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:create_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:create_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "delete_node": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:delete_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:delete_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "reparent_node": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:reparent_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:reparent_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "set_property": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:set_property",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:set_property"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "rename_node": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:rename_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:rename_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "family": "mutation"
+  },
+  "duplicate_node": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:duplicate_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:duplicate_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "move_node": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:move_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:move_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "add_to_group": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:add_to_group",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:add_to_group"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "remove_from_group": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:remove_from_group",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:remove_from_group"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "set_selection": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:set_selection",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:set_selection"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "changes_selection"
+   ],
+   "family": "mutation"
+  },
+  "get_node_properties": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:get_node_properties",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:get_node_properties"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "get_children": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:get_children",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:get_children"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "family": "editor_contact"
+  },
+  "get_groups": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/node_handler.gd:get_groups",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/node_handler.gd:get_groups"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "get_logs": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:get_logs",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_logs"
+   ],
+   "family": "editor_contact"
+  },
+  "clear_logs": {
+   "effects": [
+    "delete"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:clear_logs",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:clear_logs"
+   ],
+   "side_effects": [
+    "clears_logs"
+   ],
+   "family": "mutation"
+  },
+  "take_screenshot": {
+   "effects": [
+    "delete"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:take_screenshot",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:take_screenshot"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "get_performance_monitors": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:get_performance_monitors",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_performance_monitors"
+   ],
+   "family": "editor_contact"
+  },
+  "reload_plugin": {
+   "effects": [
+    "run_code",
+    "send",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:reload_plugin",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:reload_plugin"
+   ],
+   "side_effects": [
+    "rescans",
+    "saves_project_settings",
+    "toggles_plugin"
+   ],
+   "family": "mutation"
+  },
+  "quit_editor": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:quit_editor",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:quit_editor"
+   ],
+   "side_effects": [
+    "quits_editor"
+   ],
+   "family": "editor_contact"
+  },
+  "game_eval": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:game_eval",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_eval"
+   ],
+   "side_effects": [
+    "evaluates_code"
+   ],
+   "family": "envelope"
+  },
+  "game_command": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_debug_control": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/editor_handler.gd:game_debug_control",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_debug_control"
+   ],
+   "family": "editor_contact"
+  },
+  "get_project_setting": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/project_handler.gd:get_project_setting",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/project_handler.gd:get_project_setting"
+   ],
+   "family": "editor_contact"
+  },
+  "set_project_setting": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/project_handler.gd:set_project_setting",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/project_handler.gd:set_project_setting"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "set_main_scene": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/project_handler.gd:set_main_scene",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/project_handler.gd:set_main_scene"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "loads_resource",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "run_project": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/project_handler.gd:run_project",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/project_handler.gd:run_project"
+   ],
+   "side_effects": [
+    "plays_game"
+   ],
+   "family": "mutation"
+  },
+  "stop_project": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/project_handler.gd:stop_project",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/project_handler.gd:stop_project"
+   ],
+   "side_effects": [
+    "stops_game"
+   ],
+   "family": "envelope"
+  },
+  "search_filesystem": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/project_handler.gd:search_filesystem",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/project_handler.gd:search_filesystem"
+   ],
+   "family": "editor_contact"
+  },
+  "configure_client": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/client_handler.gd:configure_client",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/client_handler.gd:configure_client"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "remove_client": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/client_handler.gd:remove_client",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/client_handler.gd:remove_client"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "check_client_status": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/client_handler.gd:check_client_status",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/client_handler.gd:check_client_status"
+   ],
+   "family": "editor_contact"
+  },
+  "create_script": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/script_handler.gd:create_script",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/script_handler.gd:create_script"
+   ],
+   "side_effects": [
+    "evaluates_code",
+    "loads_resource",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "patch_script": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/script_handler.gd:patch_script",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/script_handler.gd:patch_script"
+   ],
+   "side_effects": [
+    "evaluates_code",
+    "loads_resource",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "read_script": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/script_handler.gd:read_script",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/script_handler.gd:read_script"
+   ],
+   "family": "editor_contact"
+  },
+  "attach_script": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/script_handler.gd:attach_script",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/script_handler.gd:attach_script"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource",
+    "sets_script"
+   ],
+   "family": "mutation"
+  },
+  "detach_script": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/script_handler.gd:detach_script",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/script_handler.gd:detach_script"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "sets_script"
+   ],
+   "family": "mutation"
+  },
+  "find_symbols": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/script_handler.gd:find_symbols",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/script_handler.gd:find_symbols"
+   ],
+   "family": "editor_contact"
+  },
+  "search_resources": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/resource_handler.gd:search_resources",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:search_resources"
+   ],
+   "family": "editor_contact"
+  },
+  "load_resource": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/resource_handler.gd:load_resource",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:load_resource"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "inspect_resource": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/resource_handler.gd:inspect_resource",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:inspect_resource"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "assign_resource": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/resource_handler.gd:assign_resource",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:assign_resource"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "create_resource": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/resource_handler.gd:create_resource",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:create_resource"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "get_resource_info": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/resource_handler.gd:get_resource_info",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:get_resource_info"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "get_class_info": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/api_handler.gd:get_class_info",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/api_handler.gd:get_class_info"
+   ],
+   "family": "editor_contact"
+  },
+  "read_file": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:read_file",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:read_file"
+   ],
+   "family": "editor_contact"
+  },
+  "write_file": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:write_file",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:write_file"
+   ],
+   "side_effects": [
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "reimport": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:reimport",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:reimport"
+   ],
+   "side_effects": [
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "scan_filesystem": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:scan_filesystem",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:scan_filesystem"
+   ],
+   "side_effects": [
+    "rescans"
+   ],
+   "family": "editor_contact"
+  },
+  "move_file": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:move_file",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:move_file"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "rename_file": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:rename_file",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:rename_file"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "remove_file": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/filesystem_handler.gd:remove_file",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:remove_file"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "list_signals": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/signal_handler.gd:list_signals",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/signal_handler.gd:list_signals"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "connect_signal": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/signal_handler.gd:connect_signal",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/signal_handler.gd:connect_signal"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "disconnect_signal": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/signal_handler.gd:disconnect_signal",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/signal_handler.gd:disconnect_signal"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "list_autoloads": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/autoload_handler.gd:list_autoloads",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/autoload_handler.gd:list_autoloads"
+   ],
+   "family": "editor_contact"
+  },
+  "add_autoload": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/autoload_handler.gd:add_autoload",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/autoload_handler.gd:add_autoload"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "remove_autoload": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/autoload_handler.gd:remove_autoload",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/autoload_handler.gd:remove_autoload"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "list_actions": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/input_handler.gd:list_actions",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/input_handler.gd:list_actions"
+   ],
+   "family": "editor_contact"
+  },
+  "add_action": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/input_handler.gd:add_action",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/input_handler.gd:add_action"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "ensure_action": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/input_handler.gd:ensure_action",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/input_handler.gd:ensure_action"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "remove_action": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/input_handler.gd:remove_action",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/input_handler.gd:remove_action"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "bind_event": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/input_handler.gd:bind_event",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/input_handler.gd:bind_event"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "ensure_binding": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/input_handler.gd:ensure_binding",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/input_handler.gd:ensure_binding"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "run_tests": {
+   "effects": [
+    "delete",
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/test_handler.gd:run_tests",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/test_handler.gd:run_tests"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "get_test_results": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/test_handler.gd:get_test_results",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/test_handler.gd:get_test_results"
+   ],
+   "family": "editor_contact"
+  },
+  "batch_execute": {
+   "effects": [
+    "dynamic"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/batch_handler.gd:batch_execute",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/batch_handler.gd:batch_execute"
+   ],
+   "dynamic": true,
+   "family": "mutation"
+  },
+  "set_anchor_preset": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/ui_handler.gd:set_anchor_preset",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:set_anchor_preset"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "set_text": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/ui_handler.gd:set_text",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:set_text"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "set_richtext": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/ui_handler.gd:set_richtext",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:set_richtext"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "build_layout": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/ui_handler.gd:build_layout",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:build_layout"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "create_theme": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:create_theme",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:create_theme"
+   ],
+   "side_effects": [
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_color": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_color",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_color"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_constant": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_constant",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_constant"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_font_size": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_font_size",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_font_size"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_stylebox_flat": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_stylebox_flat",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_stylebox_flat"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_stylebox_texture": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_stylebox_texture",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_stylebox_texture"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_font": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_font",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_font"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_set_icon": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:set_icon",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_icon"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_stylebox_override": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:stylebox_override",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:stylebox_override"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "apply_theme": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/theme_handler.gd:apply_theme",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:apply_theme"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "animation_player_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:create_player",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:create_player"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "animation_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:create_animation",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:create_animation"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "animation_add_property_track": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:add_property_track",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:add_property_track"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "animation_add_method_track": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:add_method_track",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:add_method_track"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "animation_set_autoplay": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:set_autoplay",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:set_autoplay"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "animation_play": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:play",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:play"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "animation_stop": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:stop",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:stop"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "animation_list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:list_animations",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:list_animations"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:get_animation",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:get_animation"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_create_simple": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:create_simple",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:create_simple"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "animation_delete": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:delete_animation",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:delete_animation"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "animation_validate": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:validate_animation",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:validate_animation"
+   ],
+   "node_access": {
+    "reads": [
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "animation_preset_fade": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_fade",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_fade"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "animation_preset_slide": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_slide",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_slide"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "animation_preset_shake": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_shake",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_shake"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "animation_preset_pulse": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_pulse",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_pulse"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "material_create": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:create_material",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:create_material"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "visual_shader_create_graph": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:create_graph",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:create_graph"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "instantiates_scene",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "visual_shader_get": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:get_graph",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:get_graph"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "visual_shader_node_catalog": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:node_catalog",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:node_catalog"
+   ],
+   "side_effects": [
+    "instantiates_scene"
+   ],
+   "family": "editor_contact"
+  },
+  "visual_shader_edit": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:edit_graph",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:edit_graph"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "instantiates_scene",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_set_param": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:set_param",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:set_param"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_set_shader_param": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:set_shader_param",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:set_shader_param"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_get": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:get_material",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:get_material"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "material_list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:list_materials",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:list_materials"
+   ],
+   "family": "editor_contact"
+  },
+  "material_assign": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:assign_material",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:assign_material"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_apply_to_node": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:apply_to_node",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:apply_to_node"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_apply_preset": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/material_handler.gd:apply_preset",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/material_handler.gd:apply_preset"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "shader_create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/shader_handler.gd:create_shader",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:create_shader"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "shader_get": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/shader_handler.gd:get_shader",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:get_shader"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "shader_validate": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/shader_handler.gd:validate_shader",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:validate_shader"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "shader_patch": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/shader_handler.gd:patch_shader",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:patch_shader"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "particle_create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:create_particle",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:create_particle"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "particle_set_main": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:set_main",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:set_main"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "particle_set_process": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:set_process",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:set_process"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "particle_set_draw_pass": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:set_draw_pass",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:set_draw_pass"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "particle_restart": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:restart_particle",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:restart_particle"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "particle_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:get_particle",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:get_particle"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "particle_apply_preset": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/particle_handler.gd:apply_preset",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:apply_preset"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "camera_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:create_camera",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:create_camera"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "camera_configure": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:configure",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:configure"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": true
+   },
+   "family": "mutation"
+  },
+  "camera_set_limits_2d": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:set_limits_2d",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:set_limits_2d"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "camera_set_damping_2d": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:set_damping_2d",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:set_damping_2d"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "camera_follow_2d": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:follow_2d",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:follow_2d"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "camera_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:get_camera",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:get_camera"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": true
+   },
+   "family": "editor_contact"
+  },
+  "camera_list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:list_cameras",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:list_cameras"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "family": "editor_contact"
+  },
+  "camera_apply_preset": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/camera_handler.gd:apply_preset",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:apply_preset"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "audio_player_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/audio_handler.gd:create_player",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:create_player"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "audio_player_set_stream": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/audio_handler.gd:set_stream",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:set_stream"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "audio_player_set_playback": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/audio_handler.gd:set_playback",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:set_playback"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "audio_play": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/audio_handler.gd:play",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:play"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "audio_stop": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/audio_handler.gd:stop",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:stop"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "audio_list": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/audio_handler.gd:list_streams",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:list_streams"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "physics_shape_autofit": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/physics_shape_handler.gd:autofit",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/physics_shape_handler.gd:autofit"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": true
+   },
+   "side_effects": [
+    "instantiates_scene"
+   ],
+   "family": "mutation"
+  },
+  "physics_shape_generate": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/physics_shape_handler.gd:generate",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/physics_shape_handler.gd:generate"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "environment_create": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/environment_handler.gd:create_environment",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/environment_handler.gd:create_environment"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "gradient_texture_create": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/texture_handler.gd:create_gradient_texture",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/texture_handler.gd:create_gradient_texture"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "noise_texture_create": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/texture_handler.gd:create_noise_texture",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/texture_handler.gd:create_noise_texture"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "curve_set_points": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "handler": "plugin/addons/godot_ai/handlers/curve_handler.gd:set_points",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/curve_handler.gd:set_points"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "control_draw_recipe": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/control_draw_recipe_handler.gd:control_draw_recipe",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/control_draw_recipe_handler.gd:control_draw_recipe"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "sets_script"
+   ],
+   "family": "mutation"
+  },
+  "tilemap_set_cell": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/tilemap_handler.gd:set_cell",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:set_cell"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "tilemap_set_cells_rect": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/tilemap_handler.gd:set_cells_rect",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:set_cells_rect"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "tilemap_clear": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/tilemap_handler.gd:clear_layer",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:clear_layer"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "tilemap_get_cells": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/tilemap_handler.gd:get_used_cells",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:get_used_cells"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "tileset_get_atlas_tiles": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/tileset_handler.gd:get_atlas_tiles",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/tileset_handler.gd:get_atlas_tiles"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "tileset_get_atlas_image": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/tileset_handler.gd:get_atlas_image",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/tileset_handler.gd:get_atlas_image"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "gridmap_set_item": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/gridmap_handler.gd:set_item",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:set_item"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "gridmap_fill": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/gridmap_handler.gd:fill",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:fill"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "gridmap_clear": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/gridmap_handler.gd:clear_layer",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:clear_layer"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "gridmap_get_used_cells": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/gridmap_handler.gd:get_used_cells",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:get_used_cells"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "gridmap_list_library_items": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/gridmap_handler.gd:list_library_items",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:list_library_items"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "navigation_bake": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/navigation_handler.gd:bake",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/navigation_handler.gd:bake"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  },
+  "navigation_path_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/navigation_handler.gd:path_get",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/navigation_handler.gd:path_get"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "family": "editor_contact"
+  },
+  "csg_create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/csg_handler.gd:create",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/csg_handler.gd:create"
+   ],
+   "node_access": {
+    "reads": [
+     "name"
+    ],
+    "walks": false
+   },
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "csg_set_operation": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "handler": "plugin/addons/godot_ai/handlers/csg_handler.gd:set_operation",
+   "evidence": [
+    "plugin/addons/godot_ai/handlers/csg_handler.gd:set_operation"
+   ],
+   "node_access": {
+    "reads": [
+     "name",
+     "values"
+    ],
+    "walks": false
+   },
+   "family": "mutation"
+  }
+ },
+ "by_tool": {
+  "animation_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_create",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:create_animation"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.player_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_player_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.player_create",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:create_player"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.delete": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_delete"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.delete",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:delete_animation"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.validate": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_validate"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.validate",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:validate_animation"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.add_property_track": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_add_property_track"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.add_property_track",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:add_property_track"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.add_method_track": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_add_method_track"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.add_method_track",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:add_method_track"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.set_autoplay": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_set_autoplay"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.set_autoplay",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:set_autoplay"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.play": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_play"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.play",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:play"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.stop": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_stop"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.stop",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:stop"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_list"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.list",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:list_animations"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.get",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:get_animation"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.create_simple": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_create_simple"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.create_simple",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:create_simple"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "animation_manage.preset_fade": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_preset_fade"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.preset_fade",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_fade"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.preset_slide": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_preset_slide"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.preset_slide",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_slide"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.preset_shake": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_preset_shake"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.preset_shake",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_shake"
+   ],
+   "family": "editor_contact"
+  },
+  "animation_manage.preset_pulse": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "animation_preset_pulse"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/animation.py:animation_manage.preset_pulse",
+    "plugin/addons/godot_ai/handlers/animation_handler.gd:preset_pulse"
+   ],
+   "family": "editor_contact"
+  },
+  "api_manage.get_class": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_class_info"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/api.py:api_manage.get_class",
+    "plugin/addons/godot_ai/handlers/api_handler.gd:get_class_info"
+   ],
+   "family": "editor_contact"
+  },
+  "audio_manage.player_create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "audio_player_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/audio.py:audio_manage.player_create",
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:create_player"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "audio_manage.player_set_stream": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "audio_player_set_stream"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/audio.py:audio_manage.player_set_stream",
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:set_stream"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "audio_manage.player_set_playback": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "audio_player_set_playback"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/audio.py:audio_manage.player_set_playback",
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:set_playback"
+   ],
+   "family": "mutation"
+  },
+  "audio_manage.play": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "audio_play"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/audio.py:audio_manage.play",
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:play"
+   ],
+   "family": "editor_contact"
+  },
+  "audio_manage.stop": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "audio_stop"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/audio.py:audio_manage.stop",
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:stop"
+   ],
+   "family": "editor_contact"
+  },
+  "audio_manage.list": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "audio_list"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/audio.py:audio_manage.list",
+    "plugin/addons/godot_ai/handlers/audio_handler.gd:list_streams"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "autoload_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "list_autoloads"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/autoload.py:autoload_manage.list",
+    "plugin/addons/godot_ai/handlers/autoload_handler.gd:list_autoloads"
+   ],
+   "family": "editor_contact"
+  },
+  "autoload_manage.add": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "add_autoload"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/autoload.py:autoload_manage.add",
+    "plugin/addons/godot_ai/handlers/autoload_handler.gd:add_autoload"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "autoload_manage.remove": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "remove_autoload"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/autoload.py:autoload_manage.remove",
+    "plugin/addons/godot_ai/handlers/autoload_handler.gd:remove_autoload"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "batch_execute": {
+   "effects": [
+    "dynamic"
+   ],
+   "disk": false,
+   "commands": [
+    "batch_execute"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/batch.py:batch_execute",
+    "plugin/addons/godot_ai/handlers/batch_handler.gd:batch_execute"
+   ],
+   "dynamic": true,
+   "family": "mutation"
+  },
+  "camera_manage.create": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.create",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:create_camera"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "camera_manage.configure": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_configure"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.configure",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:configure"
+   ],
+   "family": "mutation"
+  },
+  "camera_manage.set_limits_2d": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_set_limits_2d"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.set_limits_2d",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:set_limits_2d"
+   ],
+   "family": "mutation"
+  },
+  "camera_manage.set_damping_2d": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_set_damping_2d"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.set_damping_2d",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:set_damping_2d"
+   ],
+   "family": "mutation"
+  },
+  "camera_manage.follow_2d": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_follow_2d"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.follow_2d",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:follow_2d"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "camera_manage.get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.get",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:get_camera"
+   ],
+   "family": "editor_contact"
+  },
+  "camera_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_list"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.list",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:list_cameras"
+   ],
+   "family": "editor_contact"
+  },
+  "camera_manage.apply_preset": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "camera_apply_preset"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/camera.py:camera_manage.apply_preset",
+    "plugin/addons/godot_ai/handlers/camera_handler.gd:apply_preset"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "client_manage.status": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "check_client_status"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/client.py:client_manage.status",
+    "plugin/addons/godot_ai/handlers/client_handler.gd:check_client_status"
+   ],
+   "family": "editor_contact"
+  },
+  "client_manage.configure": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "configure_client"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/client.py:client_manage.configure",
+    "plugin/addons/godot_ai/handlers/client_handler.gd:configure_client"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "client_manage.remove": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "remove_client"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/client.py:client_manage.remove",
+    "plugin/addons/godot_ai/handlers/client_handler.gd:remove_client"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "csg_manage.csg_create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "csg_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/csg.py:csg_manage.csg_create",
+    "plugin/addons/godot_ai/handlers/csg_handler.gd:create"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "csg_manage.csg_set_operation": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "csg_set_operation"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/csg.py:csg_manage.csg_set_operation",
+    "plugin/addons/godot_ai/handlers/csg_handler.gd:set_operation"
+   ],
+   "family": "mutation"
+  },
+  "custom_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [],
+   "evidence": [
+    "src/godot_ai/tools/custom.py:custom_manage.list"
+   ],
+   "family": "editor_contact"
+  },
+  "custom_manage.invoke": {
+   "effects": [
+    "unresolved"
+   ],
+   "disk": false,
+   "commands": [],
+   "evidence": [
+    "src/godot_ai/tools/custom.py:custom_manage.invoke"
+   ],
+   "family": "editor_contact"
+  },
+  "editor_state": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_editor_state"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_state",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_editor_state"
+   ],
+   "family": "editor_contact"
+  },
+  "logs_read": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_logs"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:logs_read",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_logs"
+   ],
+   "family": "editor_contact"
+  },
+  "editor_screenshot": {
+   "effects": [
+    "delete"
+   ],
+   "disk": false,
+   "commands": [
+    "take_screenshot"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_screenshot",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:take_screenshot"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "editor_reload_plugin": {
+   "effects": [
+    "run_code",
+    "send",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "reload_plugin"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_reload_plugin",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:reload_plugin"
+   ],
+   "side_effects": [
+    "rescans",
+    "saves_project_settings",
+    "toggles_plugin"
+   ],
+   "family": "mutation"
+  },
+  "editor_manage.state": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_editor_state"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.state",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_editor_state"
+   ],
+   "family": "editor_contact"
+  },
+  "editor_manage.selection_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_selection"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.selection_get",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_selection"
+   ],
+   "family": "editor_contact"
+  },
+  "editor_manage.selection_set": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "set_selection"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.selection_set",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:set_selection"
+   ],
+   "side_effects": [
+    "changes_selection"
+   ],
+   "family": "mutation"
+  },
+  "editor_manage.monitors_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_performance_monitors"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.monitors_get",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:get_performance_monitors"
+   ],
+   "family": "editor_contact"
+  },
+  "editor_manage.quit": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "quit_editor"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.quit",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:quit_editor"
+   ],
+   "side_effects": [
+    "quits_editor"
+   ],
+   "family": "editor_contact"
+  },
+  "editor_manage.logs_clear": {
+   "effects": [
+    "delete"
+   ],
+   "disk": false,
+   "commands": [
+    "clear_logs"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.logs_clear",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:clear_logs"
+   ],
+   "side_effects": [
+    "clears_logs"
+   ],
+   "family": "mutation"
+  },
+  "editor_manage.game_eval": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_eval"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/editor.py:editor_manage.game_eval",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_eval"
+   ],
+   "side_effects": [
+    "evaluates_code"
+   ],
+   "family": "envelope"
+  },
+  "filesystem_manage.read_text": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "read_file"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.read_text",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:read_file"
+   ],
+   "family": "editor_contact"
+  },
+  "filesystem_manage.write_text": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "write_file"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.write_text",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:write_file"
+   ],
+   "side_effects": [
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "filesystem_manage.reimport": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "reimport"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.reimport",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:reimport"
+   ],
+   "side_effects": [
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "filesystem_manage.scan": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "scan_filesystem"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.scan",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:scan_filesystem"
+   ],
+   "side_effects": [
+    "rescans"
+   ],
+   "family": "editor_contact"
+  },
+  "filesystem_manage.search": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "search_filesystem"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.search",
+    "plugin/addons/godot_ai/handlers/project_handler.gd:search_filesystem"
+   ],
+   "family": "editor_contact"
+  },
+  "filesystem_manage.move": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "move_file"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.move",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:move_file"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "filesystem_manage.rename": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "rename_file"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.rename",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:rename_file"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "filesystem_manage.remove": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "remove_file"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/filesystem.py:filesystem_manage.remove",
+    "plugin/addons/godot_ai/handlers/filesystem_handler.gd:remove_file"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans"
+   ],
+   "family": "mutation"
+  },
+  "game_manage.get_scene_tree": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.get_scene_tree",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.get_node_info": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.get_node_info",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.get_ui_elements": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.get_ui_elements",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.suspend": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_debug_control"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.suspend",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_debug_control"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.resume": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_debug_control"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.resume",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_debug_control"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.next_frame": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_debug_control"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.next_frame",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_debug_control"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.debug_status": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_debug_control"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.debug_status",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_debug_control"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.input_key": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.input_key",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.input_mouse": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.input_mouse",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.input_gamepad": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.input_gamepad",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.input_action": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.input_action",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.input_sequence": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.input_sequence",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "game_manage.input_state": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "game_command"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/game.py:game_manage.input_state",
+    "plugin/addons/godot_ai/handlers/editor_handler.gd:game_command"
+   ],
+   "family": "editor_contact"
+  },
+  "gridmap_manage.gridmap_set_item": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "gridmap_set_item"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/gridmap.py:gridmap_manage.gridmap_set_item",
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:set_item"
+   ],
+   "family": "mutation"
+  },
+  "gridmap_manage.gridmap_fill": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "gridmap_fill"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/gridmap.py:gridmap_manage.gridmap_fill",
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:fill"
+   ],
+   "family": "mutation"
+  },
+  "gridmap_manage.gridmap_clear": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "gridmap_clear"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/gridmap.py:gridmap_manage.gridmap_clear",
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:clear_layer"
+   ],
+   "family": "mutation"
+  },
+  "gridmap_manage.gridmap_get_used_cells": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "gridmap_get_used_cells"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/gridmap.py:gridmap_manage.gridmap_get_used_cells",
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:get_used_cells"
+   ],
+   "family": "editor_contact"
+  },
+  "gridmap_manage.gridmap_list_library_items": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "gridmap_list_library_items"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/gridmap.py:gridmap_manage.gridmap_list_library_items",
+    "plugin/addons/godot_ai/handlers/gridmap_handler.gd:list_library_items"
+   ],
+   "family": "editor_contact"
+  },
+  "input_map_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "list_actions"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/input_map.py:input_map_manage.list",
+    "plugin/addons/godot_ai/handlers/input_handler.gd:list_actions"
+   ],
+   "family": "editor_contact"
+  },
+  "input_map_manage.add_action": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "add_action"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/input_map.py:input_map_manage.add_action",
+    "plugin/addons/godot_ai/handlers/input_handler.gd:add_action"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "input_map_manage.ensure_action": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "ensure_action"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/input_map.py:input_map_manage.ensure_action",
+    "plugin/addons/godot_ai/handlers/input_handler.gd:ensure_action"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "input_map_manage.remove_action": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "remove_action"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/input_map.py:input_map_manage.remove_action",
+    "plugin/addons/godot_ai/handlers/input_handler.gd:remove_action"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "input_map_manage.bind_event": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "bind_event"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/input_map.py:input_map_manage.bind_event",
+    "plugin/addons/godot_ai/handlers/input_handler.gd:bind_event"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "input_map_manage.ensure_binding": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "ensure_binding"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/input_map.py:input_map_manage.ensure_binding",
+    "plugin/addons/godot_ai/handlers/input_handler.gd:ensure_binding"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.visual_shader_create_graph": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "visual_shader_create_graph"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.visual_shader_create_graph",
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:create_graph"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "instantiates_scene",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.visual_shader_get": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "visual_shader_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.visual_shader_get",
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:get_graph"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "material_manage.visual_shader_node_catalog": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "visual_shader_node_catalog"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.visual_shader_node_catalog",
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:node_catalog"
+   ],
+   "side_effects": [
+    "instantiates_scene"
+   ],
+   "family": "editor_contact"
+  },
+  "material_manage.visual_shader_edit": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "visual_shader_edit"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.visual_shader_edit",
+    "plugin/addons/godot_ai/handlers/visual_shader_handler.gd:edit_graph"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "instantiates_scene",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.create": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "material_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.create",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:create_material"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.set_param": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "material_set_param"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.set_param",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:set_param"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.set_shader_param": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "material_set_shader_param"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.set_shader_param",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:set_shader_param"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.get": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "material_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.get",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:get_material"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "material_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "material_list"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.list",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:list_materials"
+   ],
+   "family": "editor_contact"
+  },
+  "material_manage.assign": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "material_assign"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.assign",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:assign_material"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.apply_to_node": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "material_apply_to_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.apply_to_node",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:apply_to_node"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.apply_preset": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "material_apply_preset"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.apply_preset",
+    "plugin/addons/godot_ai/handlers/material_handler.gd:apply_preset"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.shader_create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "shader_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.shader_create",
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:create_shader"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.shader_get": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "shader_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.shader_get",
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:get_shader"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "material_manage.shader_validate": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "shader_validate"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.shader_validate",
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:validate_shader"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "material_manage.shader_patch": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "shader_patch"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/material.py:material_manage.shader_patch",
+    "plugin/addons/godot_ai/handlers/shader_handler.gd:patch_shader"
+   ],
+   "side_effects": [
+    "deletes_file",
+    "loads_resource",
+    "moves_file",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "navigation_manage.bake": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "navigation_bake"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/navigation.py:navigation_manage.bake",
+    "plugin/addons/godot_ai/handlers/navigation_handler.gd:bake"
+   ],
+   "family": "mutation"
+  },
+  "navigation_manage.path_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "navigation_path_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/navigation.py:navigation_manage.path_get",
+    "plugin/addons/godot_ai/handlers/navigation_handler.gd:path_get"
+   ],
+   "family": "editor_contact"
+  },
+  "node_get_properties": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_node_properties"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_get_properties",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:get_node_properties"
+   ],
+   "family": "editor_contact"
+  },
+  "node_create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "create_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_create",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:create_node"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "node_set_property": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "set_property"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_set_property",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:set_property"
+   ],
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "node_find": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "find_nodes"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_find",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:find_nodes"
+   ],
+   "family": "editor_contact"
+  },
+  "node_manage.get_children": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_children"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.get_children",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:get_children"
+   ],
+   "family": "editor_contact"
+  },
+  "node_manage.get_groups": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_groups"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.get_groups",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:get_groups"
+   ],
+   "family": "editor_contact"
+  },
+  "node_manage.delete": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "delete_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.delete",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:delete_node"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "node_manage.duplicate": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "duplicate_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.duplicate",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:duplicate_node"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "node_manage.rename": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "rename_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.rename",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:rename_node"
+   ],
+   "family": "mutation"
+  },
+  "node_manage.move": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "move_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.move",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:move_node"
+   ],
+   "family": "mutation"
+  },
+  "node_manage.reparent": {
+   "effects": [
+    "delete",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "reparent_node"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.reparent",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:reparent_node"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "node_manage.add_to_group": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "add_to_group"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.add_to_group",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:add_to_group"
+   ],
+   "family": "mutation"
+  },
+  "node_manage.remove_from_group": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "remove_from_group"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/node.py:node_manage.remove_from_group",
+    "plugin/addons/godot_ai/handlers/node_handler.gd:remove_from_group"
+   ],
+   "family": "mutation"
+  },
+  "particle_manage.create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.create",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:create_particle"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "particle_manage.set_main": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_set_main"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.set_main",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:set_main"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "particle_manage.set_process": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_set_process"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.set_process",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:set_process"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "particle_manage.set_draw_pass": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_set_draw_pass"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.set_draw_pass",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:set_draw_pass"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "particle_manage.restart": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_restart"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.restart",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:restart_particle"
+   ],
+   "family": "editor_contact"
+  },
+  "particle_manage.get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_get"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.get",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:get_particle"
+   ],
+   "family": "editor_contact"
+  },
+  "particle_manage.apply_preset": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "particle_apply_preset"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/particle.py:particle_manage.apply_preset",
+    "plugin/addons/godot_ai/handlers/particle_handler.gd:apply_preset"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "project_run": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "run_project"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/project.py:project_run",
+    "plugin/addons/godot_ai/handlers/project_handler.gd:run_project"
+   ],
+   "side_effects": [
+    "plays_game"
+   ],
+   "family": "mutation"
+  },
+  "project_manage.stop": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "stop_project"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/project.py:project_manage.stop",
+    "plugin/addons/godot_ai/handlers/project_handler.gd:stop_project"
+   ],
+   "side_effects": [
+    "stops_game"
+   ],
+   "family": "envelope"
+  },
+  "project_manage.settings_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_project_setting"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/project.py:project_manage.settings_get",
+    "plugin/addons/godot_ai/handlers/project_handler.gd:get_project_setting"
+   ],
+   "family": "editor_contact"
+  },
+  "project_manage.settings_set": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "set_project_setting"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/project.py:project_manage.settings_set",
+    "plugin/addons/godot_ai/handlers/project_handler.gd:set_project_setting"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "project_manage.set_main_scene": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "set_main_scene"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/project.py:project_manage.set_main_scene",
+    "plugin/addons/godot_ai/handlers/project_handler.gd:set_main_scene"
+   ],
+   "side_effects": [
+    "changes_project_settings",
+    "loads_resource",
+    "saves_project_settings"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.search": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "search_resources"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.search",
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:search_resources"
+   ],
+   "family": "editor_contact"
+  },
+  "resource_manage.load": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "load_resource"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.load",
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:load_resource"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "resource_manage.inspect": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "inspect_resource"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.inspect",
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:inspect_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "resource_manage.assign": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "assign_resource"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.assign",
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:assign_resource"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.get_info": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "get_resource_info"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.get_info",
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:get_resource_info"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "resource_manage.create": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "create_resource"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.create",
+    "plugin/addons/godot_ai/handlers/resource_handler.gd:create_resource"
+   ],
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.curve_set_points": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "curve_set_points"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.curve_set_points",
+    "plugin/addons/godot_ai/handlers/curve_handler.gd:set_points"
+   ],
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.environment_create": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "environment_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.environment_create",
+    "plugin/addons/godot_ai/handlers/environment_handler.gd:create_environment"
+   ],
+   "side_effects": [
+    "instantiates_scene",
+    "loads_resource",
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.physics_shape_autofit": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "physics_shape_autofit"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.physics_shape_autofit",
+    "plugin/addons/godot_ai/handlers/physics_shape_handler.gd:autofit"
+   ],
+   "side_effects": [
+    "instantiates_scene"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.physics_shape_generate": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "physics_shape_generate"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.physics_shape_generate",
+    "plugin/addons/godot_ai/handlers/physics_shape_handler.gd:generate"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.gradient_texture_create": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "gradient_texture_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.gradient_texture_create",
+    "plugin/addons/godot_ai/handlers/texture_handler.gd:create_gradient_texture"
+   ],
+   "side_effects": [
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "resource_manage.noise_texture_create": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "noise_texture_create"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/resource.py:resource_manage.noise_texture_create",
+    "plugin/addons/godot_ai/handlers/texture_handler.gd:create_noise_texture"
+   ],
+   "side_effects": [
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "scene_get_hierarchy": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_scene_tree"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/scene.py:scene_get_hierarchy",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:get_scene_tree"
+   ],
+   "family": "editor_contact"
+  },
+  "scene_open": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "open_scene"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/scene.py:scene_open",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:open_scene"
+   ],
+   "side_effects": [
+    "opens_scene",
+    "reloads_scene_from_disk"
+   ],
+   "family": "editor_contact"
+  },
+  "scene_save": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "save_scene"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/scene.py:scene_save",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:save_scene"
+   ],
+   "side_effects": [
+    "saves_scene"
+   ],
+   "family": "mutation"
+  },
+  "scene_manage.create": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "create_scene"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/scene.py:scene_manage.create",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:create_scene"
+   ],
+   "side_effects": [
+    "instantiates_scene",
+    "opens_scene",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "scene_manage.save_as": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "save_scene_as"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/scene.py:scene_manage.save_as",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:save_scene_as"
+   ],
+   "side_effects": [
+    "saves_scene"
+   ],
+   "family": "mutation"
+  },
+  "scene_manage.get_roots": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_open_scenes"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/scene.py:scene_manage.get_roots",
+    "plugin/addons/godot_ai/handlers/scene_handler.gd:get_open_scenes"
+   ],
+   "family": "editor_contact"
+  },
+  "script_create": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "create_script"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/script.py:script_create",
+    "plugin/addons/godot_ai/handlers/script_handler.gd:create_script"
+   ],
+   "side_effects": [
+    "evaluates_code",
+    "loads_resource",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "script_patch": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "patch_script"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/script.py:script_patch",
+    "plugin/addons/godot_ai/handlers/script_handler.gd:patch_script"
+   ],
+   "side_effects": [
+    "evaluates_code",
+    "loads_resource",
+    "rescans",
+    "writes_file"
+   ],
+   "family": "mutation"
+  },
+  "script_attach": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "attach_script"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/script.py:script_attach",
+    "plugin/addons/godot_ai/handlers/script_handler.gd:attach_script"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "sets_script"
+   ],
+   "family": "mutation"
+  },
+  "script_manage.read": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "read_script"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/script.py:script_manage.read",
+    "plugin/addons/godot_ai/handlers/script_handler.gd:read_script"
+   ],
+   "family": "editor_contact"
+  },
+  "script_manage.detach": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "detach_script"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/script.py:script_manage.detach",
+    "plugin/addons/godot_ai/handlers/script_handler.gd:detach_script"
+   ],
+   "side_effects": [
+    "sets_script"
+   ],
+   "family": "mutation"
+  },
+  "script_manage.find_symbols": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "find_symbols"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/script.py:script_manage.find_symbols",
+    "plugin/addons/godot_ai/handlers/script_handler.gd:find_symbols"
+   ],
+   "family": "editor_contact"
+  },
+  "session_activate": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [],
+   "evidence": [
+    "src/godot_ai/tools/session.py:session_activate"
+   ],
+   "family": "mutation"
+  },
+  "session_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [],
+   "evidence": [
+    "src/godot_ai/tools/session.py:session_manage.list"
+   ],
+   "family": "editor_contact"
+  },
+  "signal_manage.list": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "list_signals"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/signal.py:signal_manage.list",
+    "plugin/addons/godot_ai/handlers/signal_handler.gd:list_signals"
+   ],
+   "family": "editor_contact"
+  },
+  "signal_manage.connect": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "connect_signal"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/signal.py:signal_manage.connect",
+    "plugin/addons/godot_ai/handlers/signal_handler.gd:connect_signal"
+   ],
+   "family": "mutation"
+  },
+  "signal_manage.disconnect": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "disconnect_signal"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/signal.py:signal_manage.disconnect",
+    "plugin/addons/godot_ai/handlers/signal_handler.gd:disconnect_signal"
+   ],
+   "family": "mutation"
+  },
+  "test_run": {
+   "effects": [
+    "delete",
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "run_tests"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/testing.py:test_run",
+    "plugin/addons/godot_ai/handlers/test_handler.gd:run_tests"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "test_manage.results_get": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "get_test_results"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/testing.py:test_manage.results_get",
+    "plugin/addons/godot_ai/handlers/test_handler.gd:get_test_results"
+   ],
+   "family": "editor_contact"
+  },
+  "theme_manage.create": {
+   "effects": [
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "create_theme"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.create",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:create_theme"
+   ],
+   "side_effects": [
+    "rescans",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_color": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_color"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_color",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_color"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_constant": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_constant"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_constant",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_constant"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_font_size": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_font_size"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_font_size",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_font_size"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_stylebox_flat": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_stylebox_flat"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_stylebox_flat",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_stylebox_flat"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_stylebox_texture": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_stylebox_texture"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_stylebox_texture",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_stylebox_texture"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_font": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_font"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_font",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_font"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.set_icon": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": true,
+   "commands": [
+    "theme_set_icon"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.set_icon",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:set_icon"
+   ],
+   "side_effects": [
+    "loads_resource",
+    "saves_resource"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.stylebox_override": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "theme_stylebox_override"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.stylebox_override",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:stylebox_override"
+   ],
+   "family": "mutation"
+  },
+  "theme_manage.apply": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "apply_theme"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/theme.py:theme_manage.apply",
+    "plugin/addons/godot_ai/handlers/theme_handler.gd:apply_theme"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "mutation"
+  },
+  "tilemap_manage.tilemap_set_cell": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "tilemap_set_cell"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/tilemap.py:tilemap_manage.tilemap_set_cell",
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:set_cell"
+   ],
+   "family": "mutation"
+  },
+  "tilemap_manage.tilemap_set_cells_rect": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "tilemap_set_cells_rect"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/tilemap.py:tilemap_manage.tilemap_set_cells_rect",
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:set_cells_rect"
+   ],
+   "family": "mutation"
+  },
+  "tilemap_manage.tilemap_clear": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "tilemap_clear"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/tilemap.py:tilemap_manage.tilemap_clear",
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:clear_layer"
+   ],
+   "family": "mutation"
+  },
+  "tilemap_manage.tilemap_get_cells": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "commands": [
+    "tilemap_get_cells"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/tilemap.py:tilemap_manage.tilemap_get_cells",
+    "plugin/addons/godot_ai/handlers/tilemap_handler.gd:get_used_cells"
+   ],
+   "family": "editor_contact"
+  },
+  "tileset_manage.tileset_get_atlas_tiles": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "tileset_get_atlas_tiles"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/tileset.py:tileset_manage.tileset_get_atlas_tiles",
+    "plugin/addons/godot_ai/handlers/tileset_handler.gd:get_atlas_tiles"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "tileset_manage.tileset_get_atlas_image": {
+   "effects": [
+    "run_code"
+   ],
+   "disk": false,
+   "commands": [
+    "tileset_get_atlas_image"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/tileset.py:tileset_manage.tileset_get_atlas_image",
+    "plugin/addons/godot_ai/handlers/tileset_handler.gd:get_atlas_image"
+   ],
+   "side_effects": [
+    "loads_resource"
+   ],
+   "family": "editor_contact"
+  },
+  "ui_manage.set_anchor_preset": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "set_anchor_preset"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/ui.py:ui_manage.set_anchor_preset",
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:set_anchor_preset"
+   ],
+   "family": "mutation"
+  },
+  "ui_manage.set_text": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "set_text"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/ui.py:ui_manage.set_text",
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:set_text"
+   ],
+   "family": "mutation"
+  },
+  "ui_manage.set_richtext": {
+   "effects": [
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "set_richtext"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/ui.py:ui_manage.set_richtext",
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:set_richtext"
+   ],
+   "family": "mutation"
+  },
+  "ui_manage.build_layout": {
+   "effects": [
+    "delete",
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "build_layout"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/ui.py:ui_manage.build_layout",
+    "plugin/addons/godot_ai/handlers/ui_handler.gd:build_layout"
+   ],
+   "side_effects": [
+    "adds_to_tree",
+    "instantiates_scene",
+    "loads_resource",
+    "removes_nodes"
+   ],
+   "family": "mutation"
+  },
+  "ui_manage.draw_recipe": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "disk": false,
+   "commands": [
+    "control_draw_recipe"
+   ],
+   "evidence": [
+    "src/godot_ai/tools/ui.py:ui_manage.draw_recipe",
+    "plugin/addons/godot_ai/handlers/control_draw_recipe_handler.gd:control_draw_recipe"
+   ],
+   "side_effects": [
+    "sets_script"
+   ],
+   "family": "mutation"
+  },
+  "@local.play_session": {
+   "effects": [
+    "run_code"
+   ],
+   "evidence": [
+    "bridge/game_editor_bridge.py:play_session"
+   ],
+   "commands": [],
+   "family": "envelope"
+  },
+  "@local.export_game": {
+   "effects": [
+    "run_code",
+    "write"
+   ],
+   "evidence": [
+    "bridge/game_editor_bridge.py:export_game"
+   ],
+   "commands": [],
+   "family": "envelope"
+  },
+  "@cli.gut": {
+   "effects": [
+    "run_code"
+   ],
+   "evidence": [
+    "bridge/game_editor_bridge.py:run_cli_tests"
+   ],
+   "commands": [],
+   "family": "envelope"
+  },
+  "@cli.gdunit4": {
+   "effects": [
+    "run_code"
+   ],
+   "evidence": [
+    "bridge/game_editor_bridge.py:run_cli_tests"
+   ],
+   "commands": [],
+   "family": "envelope"
+  },
+  "@local.scene_look": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "evidence": [
+    "bridge/game_editor_bridge.py:disk_read"
+   ],
+   "commands": [],
+   "family": "disk_read"
+  },
+  "@local.script_look": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "evidence": [
+    "bridge/game_editor_bridge.py:disk_read"
+   ],
+   "commands": [],
+   "family": "disk_read"
+  },
+  "@local.file_look": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "evidence": [
+    "bridge/game_editor_bridge.py:disk_read"
+   ],
+   "commands": [],
+   "family": "disk_read"
+  },
+  "@local.project_look": {
+   "effects": [
+    "read"
+   ],
+   "disk": false,
+   "evidence": [
+    "bridge/game_editor_bridge.py:disk_read"
+   ],
+   "commands": [],
+   "family": "disk_read"
+  }
+ }
+}

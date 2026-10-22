@@ -1,0 +1,50 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "game-editor",
+  "version": "1.2.3",
+  "description": "Work on the Godot 4 project open in your editor, with guards and an approval per plan that says what is lost, and put GameForge sprite sheets, tile sets (a level map becomes its dual-grid tilemap), sound effects and music loops straight into the open scene. Through Godot AI (hi-godot/godot-ai) 4.3.0. Reads never run a @tool script, decided the way Godot decides it. plan_change writes nothing and returns the whole plan with each value now and after and what Godot AI does inside each step; apply_plan runs only the newest plan and reads each step back. A plan that deletes, overwrites, discards unsaved work or runs code it wrote asks a second time with confirm_risky_plan, after a list of what is lost. Play findings carry file:line and evidence, and GameForge's playtest report becomes the same fix steps. A headless play writes res://ge_headless_arm.gd and .tscn, then removes them; project.godot is not left changed.",
+  "author": {
+    "name": "TakeshiTGAL",
+    "url": "https://github.com/TakeshiTGAL"
+  },
+  "homepage": "https://github.com/TakeshiTGAL/hermes-plugin-game-editor",
+  "repository": "https://github.com/TakeshiTGAL/hermes-plugin-game-editor",
+  "license": "MIT",
+  "keywords": [
+    "godot",
+    "game",
+    "game-engine",
+    "gdscript",
+    "scene",
+    "editor",
+    "mcp"
+  ],
+  "extensions": {
+    "com.nousresearch.hermes": {
+      "servers": {
+        "game-editor": {
+          "trust": "untrusted",
+          "app": {
+            "darwin": {
+              "presence": "bundle",
+              "location": [
+                "/Applications/Godot.app",
+                "~/Applications/Godot.app",
+                "/Applications/Godot_mono.app",
+                "~/Applications/Godot_mono.app",
+                "~/Library/Application Support/Steam/steamapps/common/Godot Engine/Godot.app"
+              ],
+              "version": {
+                "kind": "plist"
+              }
+            }
+          },
+          "requires": {
+            "app": true,
+            "min_version": "4.7"
+          }
+        }
+      }
+    }
+  }
+}

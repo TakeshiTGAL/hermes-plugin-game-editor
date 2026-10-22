@@ -1,0 +1,9 @@
+[project]
+name = "game-editor"
+version = "1.2.3"
+description = "Dependency declaration so Hermes installs the MCP client this plugin's server needs."
+requires-python = ">=3.11"
+dependencies = ["mcp>=2.0.0,<3"]
+
+[tool.uv]
+package = false
