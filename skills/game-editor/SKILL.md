@@ -1,6 +1,6 @@
 ---
 name: game-editor
-description: "Godot: a sentence that names a loop part becomes a tested loop and a loopback Web build. Edit the open project, one plan at a time."
+description: "Godot, a sentence that names a loop part becomes a tested loop and a loopback Web build. Edit the open project, one plan at a time."
 version: 2.0.0
 author: TakeshiTGAL
 license: MIT
