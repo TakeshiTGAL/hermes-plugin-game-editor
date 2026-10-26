@@ -14,6 +14,7 @@ import json
 import os
 import pwd
 import re
+import secrets
 import stat
 import struct
 import subprocess
@@ -146,6 +147,7 @@ _GODOT_TOKEN = re.compile(r"^[0-9A-Za-z.+_-]{1,40}$")
 _SCENE_TOKEN = re.compile(r"^(?:[0-9a-fA-F]{64}|missing)$")
 _TEST_TOKEN = re.compile(r"^[a-z_+]{1,80}$")
 _TIME_TOKEN = re.compile(r"^[0-9T:.+-Z]{1,40}$")
+_CHECK_LINE = re.compile(r"^CHECK ([0-9a-f]{64}) (STUDIO_FAIL|STUDIO) ([a-z_= ]+)$")
 
 
 def matched_parts(goal: str) -> tuple[str, ...]:
@@ -276,6 +278,29 @@ def _append_ledger_row(directory: Path, row: dict, *, success: bool) -> None:
         os.close(fd)
     if success:
         _OBSERVED_SUCCESS.add(payload)
+
+
+def _web_needs_pass() -> str:
+    return (
+        "web is not served until a Godot test this process waited on exits 0 "
+        "and that row is the latest trusted row for its test."
+    )
+
+
+def web_unserved(directory: Path | None) -> str | None:
+    """No page until a trusted exit 0 is the latest row. An empty file is not a pass."""
+    if directory is None:
+        return _web_needs_pass()
+    rows = read_trusted(directory)
+    if not rows:
+        return _web_needs_pass()
+    latest: dict[str, dict] = {}
+    for row in rows:
+        latest[row["test"]] = row
+    for row in latest.values():
+        if row["exit_code"] != 0:
+            return _web_blocked(row)
+    return None
 
 
 def _web_blocked(row: dict) -> str:
@@ -710,10 +735,21 @@ def _sweep(root: Path, before: set[str], keep: tuple[str, ...]) -> None:
             pass
 
 
-def _run(cmd: list[str], timeout: int, extra: dict[str, str] | None = None) -> tuple[int, str]:
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=child_env(extra))
+def _run(
+    cmd: list[str],
+    timeout: int,
+    extra: dict[str, str] | None = None,
+    stdin: bytes | None = None,
+) -> tuple[int, str]:
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=child_env(extra),
+    )
     try:
-        out, _ = proc.communicate(timeout=timeout)
+        out, _ = proc.communicate(stdin, timeout=timeout)
     except subprocess.TimeoutExpired:
         pid = proc.pid
         proc.kill()
@@ -724,12 +760,20 @@ def _run(cmd: list[str], timeout: int, extra: dict[str, str] | None = None) -> t
     return code, text
 
 
-def _studio_line(output: str) -> str:
+def _observed_verdict(output: str, nonce: str) -> tuple[bool, str] | None:
+    """The one line the check printed. A STUDIO line from the loop is not this line."""
+    found: list[tuple[bool, str]] = []
     for line in output.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("STUDIO_FAIL ") or stripped.startswith("STUDIO "):
-            return stripped
-    return ""
+        match = _CHECK_LINE.match(line.strip())
+        if not match or match.group(1) != nonce:
+            continue
+        bits = match.group(3).strip()
+        if not _BITS_TOKEN.fullmatch(bits):
+            continue
+        found.append((match.group(2) == "STUDIO", bits))
+    if len(found) != 1:
+        return None
+    return found[0]
 
 
 def _append_credits(root: Path, line: str) -> None:
@@ -1161,9 +1205,16 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
         )
         lines.append("A missing loop prints STUDIO_FAIL and exits non-zero.")
         lines.append(
+            "A STUDIO line printed by the loop is not a pass. "
+            "The check prints the observation line after it watches the loop."
+        )
+        lines.append(
+            "The run uses a project file with no autoloads, then puts an existing project.godot back."
+        )
+        lines.append(
             "After that process exits, this bridge appends the ledger row. "
-            "The exit code is that process's return code. The Godot process does not write the row "
-            "and is not given a ledger key."
+            "Exit 0 is recorded only when that process returned 0 and the check's observation line is a pass. "
+            "The Godot process does not write the row and is not given a ledger key."
         )
     elif op == "loop":
         parts = require_parts(goal)
@@ -1187,9 +1238,9 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
         )
         lines.append("CREDITS " + _credits_line("game-editor", "studio/loop.gd", "MIT"))
     elif op == "web":
-        blocked = open_failure(ledger_dir())
+        blocked = web_unserved(ledger_dir())
         if blocked is not None:
-            raise Refused(_web_blocked(blocked))
+            raise Refused(blocked)
         if not (base / "studio" / "loop.tscn").is_file():
             raise Refused("game-editor: studio op web needs res://studio/loop.tscn. Plan studio op loop first.")
         web = base / "build" / "web"
@@ -1211,7 +1262,7 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
         lines.append("stops the previous 127.0.0.1 page before this export.")
         lines.append("template cache: plugin-data/game-editor/export-templates")
         lines.append("serves on 127.0.0.1 only. It does not upload.")
-        lines.append("does not serve while the latest ledger row for a test is not exit 0.")
+        lines.append("does not serve until a trusted exit 0 is the latest row for a test.")
     elif op == "import_asset":
         source = _resolve_import(base, step["path"])
         suffix = source.suffix.lower()
@@ -1251,8 +1302,8 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
                 )
             losses.append("runs code written in this plan: Movie Maker writes res://studio/take.avi")
             lines.append(
-                "writes res://studio/take.avi. The labels are the ledger lines from the failed row "
-                "and the later exit 0. Project text files are not read."
+                "writes res://studio/take.avi. The picture shows the loop playing under the ledger lines "
+                "from the failed row and the later exit 0. Project text files are not read."
             )
     else:
         raise Refused("game-editor: studio op is not known.")
@@ -1296,41 +1347,44 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
     """Run the packaged check. This process appends the one ledger row after wait()."""
     parts = require_parts(step.get("goal") or "")
     name = test_name(parts)
+    # The nonce is not written into the project and is not an environment variable.
+    # The check reads it from stdin before it adds the loop. A loop print cannot carry it.
+    nonce = secrets.token_hex(32)
     files = {
         "studio/check.gd": _check_script(parts).encode("utf-8"),
         "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
+        "project.godot": _project_text("", "res://studio/check.tscn").encode("utf-8"),
     }
     before_project = _read_text(root, "project.godot")
-    created_project = not (root / "project.godot").is_file()
-    if created_project:
-        files["project.godot"] = _project_text("", None).encode("utf-8")
+    had_project = (root / "project.godot").is_file() and not (root / "project.godot").is_symlink()
     before = _names(root)
     directory = ledger_dir()
     before_ledger = _ledger_text(directory) if directory is not None else None
     _write_files(root, files)
-    code, output = _run(
-        [godot, "--headless", "--path", str(root), "res://studio/check.tscn"],
-        40,
-    )
-    if created_project:
-        _write(root, "project.godot", files["project.godot"])
-    elif (root / "project.godot").is_file():
-        _write(root, "project.godot", before_project.encode("utf-8"))
+    try:
+        code, output = _run(
+            [godot, "--headless", "--path", str(root), "res://studio/check.tscn"],
+            40,
+            stdin=(nonce + "\n").encode("ascii"),
+        )
+    finally:
+        if had_project:
+            _write(root, "project.godot", before_project.encode("utf-8"))
+        else:
+            _write(root, "project.godot", _project_text("", None).encode("utf-8"))
     _sweep(root, before, ("studio/",))
-    line = _studio_line(output)
-    bits = _bits_from_line(line, parts)
+    observed = _observed_verdict(output, nonce)
+    if observed is None:
+        passed_line = False
+        bits = " ".join(f"{part}=false" for part in parts)
+    else:
+        passed_line, bits = observed
     if directory is None:
-        shown = line if line.startswith("STUDIO_FAIL ") else ("STUDIO_FAIL " + bits)
+        shown = ("STUDIO " if passed_line else "STUDIO_FAIL ") + bits
         reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME is unset\nplan_digest: {plan_digest(step)}"
         return _err(reply)
     tampered = _ledger_text(directory) != before_ledger
-    passed = (
-        code == 0
-        and line.startswith("STUDIO ")
-        and not line.startswith("STUDIO_FAIL")
-        and not tampered
-        and _parts_all_true(bits, parts)
-    )
+    passed = code == 0 and passed_line and not tampered and _parts_all_true(bits, parts)
     if tampered:
         note = "ledger: changed outside the godot process"
     else:
@@ -1348,11 +1402,10 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
             f"scene={row['scene']} exit_code={row['exit_code']} time={row['time']}"
         )
     if passed:
-        reply = f"{line}\nexit=0\n{note}\nplan_digest: {plan_digest(step)}"
+        reply = f"STUDIO {bits}\nexit=0\n{note}\nplan_digest: {plan_digest(step)}"
         return _ok(reply)
-    shown = line if line.startswith("STUDIO_FAIL ") else ("STUDIO_FAIL " + bits)
     shown_exit = code if code not in (0, None) else 1
-    reply = f"{shown}\nexit={shown_exit}\n{note}\nplan_digest: {plan_digest(step)}"
+    reply = f"STUDIO_FAIL {bits}\nexit={shown_exit}\n{note}\nplan_digest: {plan_digest(step)}"
     return _err(reply)
 
 
@@ -1431,11 +1484,11 @@ def _execute_import(step: dict, root: Path) -> dict:
 
 def _execute_web(step: dict, root: Path, godot: str) -> dict:
     stop_servers()
+    blocked = web_unserved(ledger_dir())
+    if blocked is not None:
+        return _err(blocked)
     if not (root / "studio" / "loop.tscn").is_file():
         raise Refused("game-editor: studio op web needs res://studio/loop.tscn. Plan studio op loop first.")
-    blocked = open_failure(ledger_dir())
-    if blocked is not None:
-        return _err(_web_blocked(blocked))
     web = root / "build" / "web"
     if web.is_dir() and any(web.iterdir()) and step.get("overwrite") is not True:
         raise Refused("game-editor: build/web already has files. Pass overwrite true.")
@@ -1521,7 +1574,7 @@ def _execute_record(step: dict, root: Path, godot: str) -> dict:
         )
     return _ok(
         "recorded res://studio/take.avi\n"
-        "ledger lines passed to the movie:\n"
+        "the picture shows the loop under these ledger lines:\n"
         f"{fail_text}\n{pass_text}\n"
         f"plan_digest: {plan_digest(step)}"
     )
@@ -1760,132 +1813,170 @@ offset_bottom = 32.0
 
 CHECK_GD_TEMPLATE = """extends Node
 
-var fell := false
-var sound := false
-var picked := false
-var door := false
-var timeout_lose := false
-var restart := false
-var phase := 0
-var frames := 0
-var started := 0
-var finished := false
 var required := PackedStringArray([__PARTS__])
 var test_name := "__TEST_NAME__"
-
-func _needed(part: String) -> bool:
-    return required.has(part)
-
-func _wants_timeout() -> bool:
-    return _needed("timeout_lose") or _needed("restart")
-
-func _bits() -> String:
-    var parts: PackedStringArray = []
-    if _needed("fell"):
-        parts.append("fell=%s" % str(fell).to_lower())
-    if _needed("sound"):
-        parts.append("sound=%s" % str(sound).to_lower())
-    if _needed("picked"):
-        parts.append("picked=%s" % str(picked).to_lower())
-    if _needed("door"):
-        parts.append("door=%s" % str(door).to_lower())
-    if _needed("timeout_lose"):
-        parts.append("timeout_lose=%s" % str(timeout_lose).to_lower())
-    if _needed("restart"):
-        parts.append("restart=%s" % str(restart).to_lower())
-    return " ".join(parts)
-
-func _satisfied() -> bool:
-    if _needed("fell") and not fell:
-        return false
-    if _needed("sound") and not sound:
-        return false
-    if _needed("picked") and not picked:
-        return false
-    if _needed("door") and not door:
-        return false
-    if _needed("timeout_lose") and not timeout_lose:
-        return false
-    if _needed("restart") and not restart:
-        return false
-    return true
+var _emit: Callable
+var _done := false
 
 func _ready() -> void:
-    started = Time.get_ticks_msec()
+    var secret := OS.read_string_from_stdin(80).strip_edges()
+    if secret.length() != 64:
+        get_tree().quit(1)
+        return
+    _emit = _bind(secret, self)
     if not ResourceLoader.exists("res://studio/loop.tscn"):
-        _finish(false)
+        _seal()
         return
     var loop = load("res://studio/loop.tscn").instantiate()
     loop.name = "Loop"
     add_child(loop)
 
 func _process(_delta: float) -> void:
-    if finished:
+    if _done or not _emit.is_valid():
         return
-    if Time.get_ticks_msec() - started > 20000:
-        _finish(false)
-        return
-    var loop = get_node_or_null("Loop")
-    if loop == null:
-        return
-    frames += 1
-    var key = loop.get_node_or_null("Key")
-    var floor_y = loop.get_node("Floor").position.y
-    if key and key.position.y > floor_y - 40.0 and abs(key.linear_velocity.y) < 40.0:
-        fell = true
-    if loop.picked:
-        picked = true
-    var beep = loop.get_node("Beep")
-    if beep.playing:
-        sound = true
-    var shape = loop.get_node("Door/Shape")
-    if loop.door_open and shape.disabled:
-        door = true
-    if phase == 0 and fell and frames > 20:
-        phase = 1
-    if phase == 1 and not picked:
-        var aim = key.global_position - loop.get_node("Player").global_position
-        loop.test_axis = aim.normalized() if aim.length() > 6.0 else Vector2.ZERO
-    if phase == 1 and picked and door:
-        phase = 2
-    if phase == 2 and not loop.won:
-        var aim2 = loop.get_node("Exit").global_position - loop.get_node("Player").global_position
-        loop.test_axis = aim2.normalized() if aim2.length() > 6.0 else Vector2.ZERO
-    if phase == 2 and loop.won:
-        if not _wants_timeout():
-            _finish(true)
-            return
-        loop.queue_free()
-        phase = 3
-        frames = 0
-        Engine.time_scale = 30.0
-        var again = load("res://studio/loop.tscn").instantiate()
-        again.name = "Loop"
-        again.restarted.connect(_on_restarted)
-        add_child(again)
-    if phase == 3 and frames > 400 and not restart:
-        _finish(false)
-        return
-    if not _wants_timeout() and _satisfied():
-        _finish(true)
+    if _emit.call("tick"):
+        _seal()
 
 func _on_restarted() -> void:
-    timeout_lose = true
-    restart = true
-    _finish(_satisfied())
-
-func _finish(ok: bool) -> void:
-    if finished:
+    if _done or not _emit.is_valid():
         return
-    finished = true
+    if _emit.call("restarted"):
+        _seal()
+
+func _exit_tree() -> void:
+    _seal()
+
+func _seal() -> void:
+    if _done:
+        return
+    _done = true
     Engine.time_scale = 1.0
-    var bits := _bits()
-    if ok:
-        print("STUDIO " + bits)
-        get_tree().quit(0)
+    if _emit.is_valid():
+        _emit.call("finish")
     else:
-        print("STUDIO_FAIL " + bits)
         get_tree().quit(1)
+
+func _bind(secret: String, host: Node) -> Callable:
+    var state := {
+        "fell": false,
+        "sound": false,
+        "picked": false,
+        "door": false,
+        "timeout_lose": false,
+        "restart": false,
+        "phase": 0,
+        "frames": 0,
+        "started": Time.get_ticks_msec(),
+        "sealed": false,
+        "force_fail": false,
+    }
+
+    var needed := func(part: String) -> bool:
+        return host.required.has(part)
+
+    var wants_timeout := func() -> bool:
+        return needed.call("timeout_lose") or needed.call("restart")
+
+    var bits_of := func() -> String:
+        var parts: PackedStringArray = []
+        if needed.call("fell"):
+            parts.append("fell=%s" % str(state["fell"]).to_lower())
+        if needed.call("sound"):
+            parts.append("sound=%s" % str(state["sound"]).to_lower())
+        if needed.call("picked"):
+            parts.append("picked=%s" % str(state["picked"]).to_lower())
+        if needed.call("door"):
+            parts.append("door=%s" % str(state["door"]).to_lower())
+        if needed.call("timeout_lose"):
+            parts.append("timeout_lose=%s" % str(state["timeout_lose"]).to_lower())
+        if needed.call("restart"):
+            parts.append("restart=%s" % str(state["restart"]).to_lower())
+        return " ".join(parts)
+
+    var satisfied := func() -> bool:
+        if needed.call("fell") and not state["fell"]:
+            return false
+        if needed.call("sound") and not state["sound"]:
+            return false
+        if needed.call("picked") and not state["picked"]:
+            return false
+        if needed.call("door") and not state["door"]:
+            return false
+        if needed.call("timeout_lose") and not state["timeout_lose"]:
+            return false
+        if needed.call("restart") and not state["restart"]:
+            return false
+        return true
+
+    return func(cmd: String) -> bool:
+        if state["sealed"]:
+            return false
+        if cmd == "restarted":
+            state["timeout_lose"] = true
+            state["restart"] = true
+            return true
+        if cmd == "finish":
+            state["sealed"] = true
+            var ok: bool = (not state["force_fail"]) and satisfied.call()
+            var kind := "STUDIO " if ok else "STUDIO_FAIL "
+            print("CHECK " + secret + " " + kind + bits_of.call())
+            host.get_tree().quit(0 if ok else 1)
+            return false
+        if cmd != "tick":
+            return false
+        if Time.get_ticks_msec() - int(state["started"]) > 20000:
+            state["force_fail"] = true
+            return true
+        var loop = host.get_node_or_null("Loop")
+        if loop == null:
+            return false
+        state["frames"] = int(state["frames"]) + 1
+        var key = loop.get_node_or_null("Key")
+        var floor = loop.get_node_or_null("Floor")
+        if key is RigidBody2D and floor and key.position.y > floor.position.y - 40.0 and abs(key.linear_velocity.y) < 40.0:
+            state["fell"] = true
+        if loop.get("picked") == true:
+            state["picked"] = true
+        var beep = loop.get_node_or_null("Beep")
+        if beep and beep.playing:
+            state["sound"] = true
+        var shape = loop.get_node_or_null("Door/Shape")
+        if shape and loop.get("door_open") == true and shape.disabled:
+            state["door"] = true
+        var phase := int(state["phase"])
+        var frames := int(state["frames"])
+        if phase == 0 and state["fell"] and frames > 20:
+            phase = 1
+        var player = loop.get_node_or_null("Player")
+        if phase == 1 and not state["picked"] and key and player:
+            var aim: Vector2 = key.global_position - player.global_position
+            loop.set("test_axis", aim.normalized() if aim.length() > 6.0 else Vector2.ZERO)
+        if phase == 1 and state["picked"] and state["door"]:
+            phase = 2
+        var exit_node = loop.get_node_or_null("Exit")
+        if phase == 2 and loop.get("won") != true and player and exit_node:
+            var aim2: Vector2 = exit_node.global_position - player.global_position
+            loop.set("test_axis", aim2.normalized() if aim2.length() > 6.0 else Vector2.ZERO)
+        if phase == 2 and loop.get("won") == true:
+            if not wants_timeout.call():
+                state["phase"] = phase
+                return true
+            loop.queue_free()
+            phase = 3
+            state["frames"] = 0
+            Engine.time_scale = 30.0
+            var again = load("res://studio/loop.tscn").instantiate()
+            again.name = "Loop"
+            if again.has_signal("restarted"):
+                again.restarted.connect(host._on_restarted)
+            host.add_child(again)
+        state["phase"] = phase
+        if phase == 3 and int(state["frames"]) > 400 and not state["restart"]:
+            state["force_fail"] = true
+            return true
+        if not wants_timeout.call() and satisfied.call():
+            return true
+        return false
 """
 
 CHECK_TSCN = """[gd_scene load_steps=2 format=3]
@@ -1899,14 +1990,36 @@ script = ExtResource("1")
 RECORD_GD = """extends Node2D
 
 var frames := 0
+var loop: Node = null
 
 func _ready() -> void:
     $Fail.text = OS.get_environment("GAME_EDITOR_FAIL_LINE")
     $Pass.text = OS.get_environment("GAME_EDITOR_PASS_LINE")
+    $Pass.offset_top = 72.0
+    $Pass.offset_bottom = 140.0
+    var band := ColorRect.new()
+    band.offset_right = 640.0
+    band.offset_bottom = 150.0
+    band.color = Color(0, 0, 0, 0.92)
+    band.z_index = 10
+    add_child(band)
+    $Fail.z_index = 11
+    $Pass.z_index = 11
+    if ResourceLoader.exists("res://studio/loop.tscn"):
+        loop = load("res://studio/loop.tscn").instantiate()
+        loop.position = Vector2(320, 210)
+        loop.scale = Vector2(0.42, 0.42)
+        loop.z_index = 1
+        add_child(loop)
+        move_child(loop, 1)
 
 func _process(_delta: float) -> void:
     frames += 1
-    if frames > 20:
+    if loop and is_instance_valid(loop):
+        var axis := Vector2(1, 0) if frames < 50 else Vector2(-0.4, 0)
+        loop.set("test_axis", axis)
+    var limit := 90 if loop != null else 20
+    if frames > limit:
         get_tree().quit(0)
 """
 

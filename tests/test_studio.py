@@ -696,8 +696,8 @@ class StudioTest(unittest.TestCase):
             self.assertIsNotNone(directory)
             directory.mkdir(parents=True)
 
-            def fake_run(_cmd, _timeout, extra=None):
-                del extra
+            def fake_run(_cmd, _timeout, extra=None, stdin=None):
+                del extra, stdin
                 forged = {
                     "bits": "picked=true",
                     "exit_code": 0,
@@ -805,6 +805,17 @@ class StudioTest(unittest.TestCase):
         try:
             loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
             self.assertFalse(loop.get("isError"), _text(loop))
+            directory = studio.ledger_dir()
+            self.assertIsNotNone(directory)
+            directory.mkdir(parents=True, exist_ok=True)
+            studio._append_ledger_row(directory, {
+                "bits": "picked=true",
+                "exit_code": 0,
+                "godot": "4.7.2.stable",
+                "scene": "missing",
+                "test": "picked",
+                "time": "2026-10-26T00:00:02Z",
+            }, success=True)
             result = studio.execute({"tool": "studio", "op": "web"}, str(root), None)
             text = _text(result)
             self.assertFalse(result.get("isError"), text)
@@ -831,6 +842,134 @@ class StudioTest(unittest.TestCase):
         finally:
             studio.stop_servers()
             tmp.cleanup()
+
+    def test_web_is_not_served_without_a_trusted_pass(self):
+        tmp, root = _project()
+        try:
+            (root / "studio").mkdir()
+            (root / "studio" / "loop.tscn").write_text("; stub\n", encoding="utf-8")
+            directory = studio.ledger_dir()
+            self.assertIsNotNone(directory)
+            directory.mkdir(parents=True)
+            forged = {
+                "bits": "picked=true",
+                "exit_code": 0,
+                "godot": "9.9.9.stable",
+                "scene": "ab" * 32,
+                "test": "picked",
+                "time": "2026-10-26T00:00:01Z",
+            }
+            (directory / "ledger.jsonl").write_text(
+                studio.canonical_payload(forged) + "\n", encoding="utf-8")
+            self.assertEqual(studio.read_trusted(directory), [])
+
+            def boom(*_args, **_kwargs):
+                raise AssertionError("template download")
+
+            original = studio.acquire_template
+            studio.acquire_template = boom
+            try:
+                with self.assertRaises(studio.Refused) as raised:
+                    studio.plan_block({"tool": "studio", "op": "web"}, 1, str(root))
+                self.assertIn("not served", str(raised.exception))
+                result = studio._execute_web({"tool": "studio", "op": "web"}, root, "/usr/bin/true")
+            finally:
+                studio.acquire_template = original
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("not served", text)
+            self.assertFalse((root / "build" / "web").exists())
+        finally:
+            tmp.cleanup()
+
+    def test_a_printed_studio_line_is_not_a_pass(self):
+        tmp, root = _project()
+        try:
+            def fake_run(cmd, _timeout, extra=None, stdin=None):
+                del extra
+                if cmd and cmd[-1] == "res://studio/check.tscn":
+                    self.assertIsNotNone(stdin)
+                    token = stdin.decode("ascii").strip()
+                    self.assertEqual(len(token), 64)
+                    self.assertIsNone(__import__("re").fullmatch(r"[0-9a-f]{64}", token) and None)
+                    self.assertRegex(token, r"^[0-9a-f]{64}$")
+                    return 0, "STUDIO sound=true picked=true door=true timeout_lose=true restart=true\n"
+                return 0, "4.7.2.stable\n"
+
+            original = studio._run
+            studio._run = fake_run
+            try:
+                result = studio.execute(
+                    {"tool": "studio", "op": "test", "goal": GOAL}, str(root), "/usr/bin/true")
+            finally:
+                studio._run = original
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn(
+                "STUDIO_FAIL sound=false picked=false door=false timeout_lose=false restart=false",
+                text)
+            self.assertNotIn("sound=true", text)
+            self.assertIn("exit_code=1", text)
+            self.assertNotRegex(text, r"[0-9a-f]{64}")
+            check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
+            self.assertIn("read_string_from_stdin", check_text)
+            self.assertNotRegex(check_text, r"[0-9a-f]{64}")
+            directory = studio.ledger_dir()
+            rows = studio.read_trusted(directory)
+            self.assertEqual(rows[-1]["exit_code"], 1)
+        finally:
+            tmp.cleanup()
+
+    def test_loop_quit_zero_is_not_a_pass(self):
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            (root / "studio").mkdir()
+            (root / "studio" / "loop.gd").write_text(
+                "extends Node2D\n"
+                "func _ready() -> void:\n"
+                "    print(\"STUDIO sound=true picked=true door=true timeout_lose=true restart=true\")\n"
+                "    get_tree().quit(0)\n"
+                "func _process(_delta: float) -> void:\n"
+                "    print(\"STUDIO sound=true picked=true door=true timeout_lose=true restart=true\")\n"
+                "    get_tree().quit(0)\n"
+                "    set_process(false)\n",
+                encoding="utf-8",
+            )
+            (root / "studio" / "loop.tscn").write_text(
+                "[gd_scene load_steps=2 format=3]\n\n"
+                "[ext_resource type=\"Script\" path=\"res://studio/loop.gd\" id=\"1\"]\n\n"
+                "[node name=\"Loop\" type=\"Node2D\"]\n"
+                "script = ExtResource(\"1\")\n",
+                encoding="utf-8",
+            )
+            result = studio.execute(
+                {"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn(
+                "STUDIO_FAIL sound=false picked=false door=false timeout_lose=false restart=false",
+                text)
+            self.assertNotIn("sound=true", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
+            scene = hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest()
+            self.assertEqual(__import__("re").findall(r"[0-9a-f]{64}", text), [scene])
+            check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
+            self.assertNotRegex(check_text, r"[0-9a-f]{64}")
+            directory = studio.ledger_dir()
+            rows = studio.read_trusted(directory)
+            self.assertEqual(rows[-1]["exit_code"], 1)
+            self.assertFalse((directory / "ledger.key").exists())
+        finally:
+            tmp.cleanup()
+
+    def test_record_script_shows_the_loop_under_both_lines(self):
+        self.assertIn('load("res://studio/loop.tscn")', studio.RECORD_GD)
+        self.assertIn("GAME_EDITOR_FAIL_LINE", studio.RECORD_GD)
+        self.assertIn("GAME_EDITOR_PASS_LINE", studio.RECORD_GD)
+        self.assertIn("test_axis", studio.RECORD_GD)
 
 
 if __name__ == "__main__":
