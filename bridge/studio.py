@@ -359,6 +359,68 @@ def loop_body_sha256() -> str:
     return hashlib.sha256(normalized_loop_body(LOOP_GD).encode("utf-8")).hexdigest()
 
 
+def package_scene_sha256() -> str:
+    return hashlib.sha256(LOOP_TSCN.encode("utf-8")).hexdigest()
+
+
+def _hex64(value: object) -> str:
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value):
+        return value
+    return ""
+
+
+def _written_path() -> Path | None:
+    directory = ledger_dir()
+    if directory is None:
+        return None
+    return directory / "written.json"
+
+
+def load_written() -> dict[str, str]:
+    """sha256 of files this package wrote, recorded at write time. Not a ledger key."""
+    path = _written_path()
+    if path is None or not path.is_file() or path.is_symlink():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    found: dict[str, str] = {}
+    for key, value in data.items():
+        digest = _hex64(value)
+        if isinstance(key, str) and re.fullmatch(r"res://[A-Za-z0-9_./-]+", key) and digest:
+            found[key] = digest
+    return found
+
+
+def _remember_written(relative: str, data: bytes) -> None:
+    if not isinstance(relative, str) or not re.fullmatch(r"[A-Za-z0-9_./-]+", relative):
+        return
+    if relative.startswith("/") or ".." in relative.split("/"):
+        return
+    directory = ledger_dir()
+    if directory is None:
+        return
+    if directory.is_symlink():
+        raise Refused("game-editor: studio refused a symlink written-file record.")
+    current = load_written()
+    current["res://" + relative] = _sha(data)
+    path = directory / "written.json"
+    temporary = directory / ".written.json.tmp"
+    if path.is_symlink() or temporary.is_symlink():
+        raise Refused("game-editor: studio refused a symlink written-file record.")
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(current, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    try:
+        os.write(fd, payload)
+    finally:
+        os.close(fd)
+    os.replace(temporary, path)
+
+
 def is_package_loop_text(text: str) -> bool:
     return normalized_loop_body(text) == normalized_loop_body(LOOP_GD)
 
@@ -427,12 +489,16 @@ def verdict_line(row: dict) -> str:
 
 def _check_script(parts: tuple[str, ...], seconds: int) -> str:
     quoted = ", ".join(json.dumps(part) for part in parts)
+    written = load_written()
     return (
         CHECK_GD_TEMPLATE
         .replace("__PARTS__", quoted)
         .replace("__TEST_NAME__", test_name(parts))
         .replace("__LOOP_BODY_SHA256__", loop_body_sha256())
         .replace("__EXPECTED_SECONDS__", f"{int(seconds)}.0")
+        .replace("__WRITTEN_LOOP__", _hex64(written.get("res://studio/loop.gd", "")))
+        .replace("__WRITTEN_SCENE__", _hex64(written.get("res://studio/loop.tscn", "")))
+        .replace("__PACKAGE_SCENE__", package_scene_sha256())
     )
 
 
@@ -579,6 +645,7 @@ def _write(root: Path, relative: str, data: bytes) -> None:
         _SW.write_bytes(root, relative, data, create=True, exclusive=False, cut_hardlink=False)
     except _SW.WriteRefused as exc:
         raise Refused(f"game-editor: refused to write {relative} ({exc.kind}).") from exc
+    _remember_written(relative, data)
 
 
 def _read_text(root: Path, relative: str) -> str:
@@ -806,6 +873,25 @@ def _run(
     text = (out or b"").decode("utf-8", "replace")
     code = proc.returncode if proc.returncode is not None else 1
     return code, text
+
+
+def _foreign_line(output: str) -> str:
+    found = ""
+    prefix = "unverified script: "
+    for line in output.splitlines():
+        text = line.strip()
+        if text.startswith(prefix) and " " not in text[len(prefix):]:
+            found = text
+    return found
+
+
+def _frames_line(output: str) -> str:
+    found = ""
+    for line in output.splitlines():
+        text = line.strip()
+        if text.startswith("physics_frames=") and text[len("physics_frames="):].isdigit():
+            found = text
+    return found
 
 
 def _observed_verdict(output: str, nonce: str) -> tuple[bool, str] | None:
@@ -1247,7 +1333,7 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
         }
         losses.extend(_losses_for(base, files))
-        losses.insert(0, "runs code written in this plan: godot --headless runs res://studio/check.gd")
+        losses.insert(0, "runs code written in this plan: godot --headless --fixed-fps 60 runs res://studio/check.gd")
         lines.append(
             f"writes res://studio/check.gd for {', '.join(parts)} and runs it. It does not write the loop."
         )
@@ -1257,11 +1343,16 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "The check prints the observation line after it watches the loop."
         )
         lines.append(
-            "It scores the key becoming a child of the player and the Limit timer firing, "
-            "not flags the loop assigns. The running root has to be the loop.gd this package wrote. "
+            "It scores the key becoming a child of the player, not flags the loop assigns. "
+            "The running root has to be the loop.gd this package wrote. "
             "Keeping that file and attaching another script is not a pass. "
-            "The fresh Limit counts only when it starts at the sentence's seconds, so a 0.05 second timer is not that timeout. "
-            "After the win, Engine.time_scale is 30, so the in-game 60 seconds finish in about two seconds of wall clock. "
+            "A child script, an inherited scene, an autoload, or any other resource this package did not write "
+            "fails as unverified script: and the path, before that script runs. "
+            "timeout_lose counts physics frames only: the sentence's seconds times 60, so 60 seconds is 3600 frames, "
+            "with Engine.time_scale held at 1. The Limit timeout signal is not a pass. "
+            "Stopping Limit before those frames is not exit 0. "
+            "restart is read after those frames: the key is back on the floor, the door collision is back, "
+            "and the player is back at the start position with velocity near zero. "
             "The scene hash covers loop.tscn and loop.gd."
         )
         lines.append(
@@ -1406,45 +1497,54 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
     # The nonce is not written into the project and is not an environment variable.
     # The check reads it from stdin before it adds the loop. A loop print cannot carry it.
     nonce = secrets.token_hex(32)
+    before_project = _read_text(root, "project.godot")
+    had_project = (root / "project.godot").is_file() and not (root / "project.godot").is_symlink()
     files = {
         "studio/check.gd": _check_script(parts, limit_seconds(step.get("goal") or "")).encode("utf-8"),
         "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
+        # The running project has no autoloads. The check reads this copy and counts them.
+        "studio/_scan_project.godot": before_project.encode("utf-8"),
         "project.godot": _project_text("", "res://studio/check.tscn").encode("utf-8"),
     }
-    before_project = _read_text(root, "project.godot")
-    had_project = (root / "project.godot").is_file() and not (root / "project.godot").is_symlink()
     before = _names(root)
     directory = ledger_dir()
     before_ledger = _ledger_text(directory) if directory is not None else None
     _write_files(root, files)
     try:
         code, output = _run(
-            [godot, "--headless", "--path", str(root), "res://studio/check.tscn"],
-            40,
+            [godot, "--headless", "--fixed-fps", "60", "--path", str(root), "res://studio/check.tscn"],
+            150,
             stdin=(nonce + "\n").encode("ascii"),
         )
     finally:
+        scan = root / "studio" / "_scan_project.godot"
+        if scan.is_file() and not scan.is_symlink():
+            scan.unlink()
         if had_project:
             _write(root, "project.godot", before_project.encode("utf-8"))
         else:
             _write(root, "project.godot", _project_text("", None).encode("utf-8"))
     _sweep(root, before, ("studio/",))
     observed = _observed_verdict(output, nonce)
+    foreign = _foreign_line(output)
+    frames = _frames_line(output)
     if observed is None:
         passed_line = False
         bits = " ".join(f"{part}=false" for part in parts)
     else:
         passed_line, bits = observed
     # A replaced loop.gd is not a pass, even when Godot was talked into exit 0.
-    if not is_package_loop(root):
+    if not is_package_loop(root) or foreign:
         passed_line = False
         bits = " ".join(f"{part}=false" for part in parts)
     if directory is None:
         shown = ("STUDIO " if passed_line else "STUDIO_FAIL ") + bits
         reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME is unset\nplan_digest: {plan_digest(step)}"
+        if foreign:
+            reply = foreign + "\n" + reply
         return _err(reply)
     tampered = _ledger_text(directory) != before_ledger
-    passed = code == 0 and passed_line and not tampered and _parts_all_true(bits, parts)
+    passed = code == 0 and passed_line and not tampered and not foreign and _parts_all_true(bits, parts)
     if tampered:
         note = "ledger: changed outside the godot process"
     else:
@@ -1463,9 +1563,15 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         )
     if passed:
         reply = f"STUDIO {bits}\nexit=0\n{note}\nplan_digest: {plan_digest(step)}"
+        if frames:
+            reply += "\n" + frames
         return _ok(reply)
     shown_exit = code if code not in (0, None) else 1
     reply = f"STUDIO_FAIL {bits}\nexit={shown_exit}\n{note}\nplan_digest: {plan_digest(step)}"
+    if foreign:
+        reply = foreign + "\n" + reply
+    if frames:
+        reply += "\n" + frames
     return _err(reply)
 
 
@@ -1877,10 +1983,16 @@ var required := PackedStringArray([__PARTS__])
 var test_name := "__TEST_NAME__"
 var expected_loop := "__LOOP_BODY_SHA256__"
 var expected_seconds := __EXPECTED_SECONDS__
+var written_loop := "__WRITTEN_LOOP__"
+var written_scene := "__WRITTEN_SCENE__"
+var package_scene := "__PACKAGE_SCENE__"
+var foreign := ""
 var _emit: Callable
 var _done := false
 
 func _ready() -> void:
+    Engine.time_scale = 1.0
+    Engine.physics_ticks_per_second = 60
     var secret := OS.read_string_from_stdin(80).strip_edges()
     if secret.length() != 64:
         get_tree().quit(1)
@@ -1891,6 +2003,8 @@ func _ready() -> void:
             _seal()
         return
     if not _attach_loop():
+        if foreign != "":
+            print("unverified script: " + foreign)
         if _emit.call("reject"):
             _seal()
         return
@@ -1976,19 +2090,157 @@ func _limit_matches(limit) -> bool:
         return false
     return float(limit.time_left) >= expected_seconds - 0.5
 
-func _wait_still(node) -> bool:
-    if node == null:
-        return false
-    var limit = node.get_node_or_null("Limit")
-    if limit == null:
-        return false
-    return is_equal_approx(float(limit.wait_time), expected_seconds)
+func _sha_file(path: String) -> String:
+    if not FileAccess.file_exists(path):
+        return ""
+    var file := FileAccess.open(path, FileAccess.READ)
+    if file == null:
+        return ""
+    var ctx := HashingContext.new()
+    ctx.start(HashingContext.HASH_SHA256)
+    ctx.update(file.get_buffer(file.get_length()))
+    file.close()
+    return ctx.finish().hex_encode().to_lower()
 
-func _elapsed_ok(started: int) -> bool:
-    var need := int(expected_seconds / 30.0 * 750.0)
-    return Time.get_ticks_msec() - started >= need
+func _known_loop_script(path: String) -> bool:
+    if path != "res://studio/loop.gd" or written_loop == "":
+        return false
+    if _sha_file(path) != written_loop:
+        return false
+    return _sha_text(FileAccess.get_file_as_string(path)) == expected_loop
+
+func _known_loop_scene(path: String) -> bool:
+    if path != "res://studio/loop.tscn" or written_scene == "" or package_scene == "":
+        return false
+    var digest := _sha_file(path)
+    return digest != "" and digest == written_scene and digest == package_scene
+
+func _prefer(bad: PackedStringArray) -> String:
+    if bad.is_empty():
+        return ""
+    for item in bad:
+        if item != "res://studio/loop.gd" and item != "res://studio/loop.tscn":
+            return item
+    return bad[0]
+
+func _embedded_script(text: String, path: String) -> String:
+    var markers := PackedStringArray(['[sub_resource type="GDScript"', '[sub_resource type="Script"'])
+    for marker in markers:
+        var at := text.find(marker)
+        if at < 0:
+            continue
+        var id_at := text.find('id="', at)
+        if id_at < 0:
+            return path + "#GDScript:inline"
+        var id_end := text.find('"', id_at + 4)
+        if id_end < 0:
+            return path + "#GDScript:inline"
+        return path + "#GDScript:" + text.substr(id_at + 4, id_end - (id_at + 4))
+    return ""
+
+func _res_paths(text: String) -> PackedStringArray:
+    var out: PackedStringArray = []
+    var needle := 'path="res://'
+    var from := 0
+    while true:
+        var at := text.find(needle, from)
+        if at < 0:
+            return out
+        var start := at + 6
+        var end := text.find('"', start)
+        if end < 0:
+            return out
+        out.append(text.substr(start, end - start))
+        from = end + 1
+    return PackedStringArray()
+
+func _scan_scene(path: String, seen: Dictionary) -> String:
+    if seen.has(path):
+        return ""
+    seen[path] = true
+    if not FileAccess.file_exists(path):
+        return path
+    var text := FileAccess.get_file_as_string(path)
+    var bad: PackedStringArray = []
+    var inline := _embedded_script(text, path)
+    if inline != "":
+        bad.append(inline)
+    for child in _res_paths(text):
+        if child.ends_with(".gd"):
+            if not _known_loop_script(child):
+                bad.append(child)
+        elif child.ends_with(".tscn"):
+            if child == path:
+                continue
+            var nested := _scan_scene(child, seen)
+            if nested != "":
+                bad.append(nested)
+        else:
+            bad.append(child)
+    var picked := _prefer(bad)
+    if picked != "":
+        return picked
+    if not _known_loop_scene(path):
+        return path
+    return ""
+
+func _scan_autoloads() -> String:
+    var path := "res://studio/_scan_project.godot"
+    if not FileAccess.file_exists(path):
+        return path
+    var in_auto := false
+    for raw in FileAccess.get_file_as_string(path).split("\\n"):
+        var line := raw.strip_edges()
+        if line.begins_with("["):
+            in_auto = line == "[autoload]"
+            continue
+        if not in_auto or line == "" or line.begins_with(";"):
+            continue
+        var q1 := line.find('"')
+        var q2 := line.rfind('"')
+        var quoted := ""
+        if q1 >= 0 and q2 > q1:
+            quoted = line.substr(q1 + 1, q2 - q1 - 1)
+        if quoted.begins_with("*"):
+            quoted = quoted.substr(1)
+        if quoted.begins_with("res://"):
+            return quoted
+        if line.find("res://") >= 0:
+            return line
+    return ""
+
+func _back_at_start(loop: Node) -> bool:
+    var player = loop.get_node_or_null("Player")
+    var key = loop.get_node_or_null("Key")
+    var door = loop.get_node_or_null("Door")
+    var shape = loop.get_node_or_null("Door/Shape")
+    if player == null or key == null or door == null or shape == null:
+        return false
+    if key.get_parent() != loop or player.get_node_or_null("Key") != null:
+        return false
+    if shape.disabled:
+        return false
+    if bool(key.freeze):
+        return false
+    if player.position.distance_to(Vector2(-180, 168)) > 3.0:
+        return false
+    if player.velocity.length() > 5.0:
+        return false
+    if key.position.distance_to(Vector2(0, 40)) > 12.0:
+        return false
+    if door.position.distance_to(Vector2(150, 168)) > 3.0:
+        return false
+    return true
 
 func _attach_loop() -> bool:
+    var auto := _scan_autoloads()
+    if auto != "":
+        foreign = auto
+        return false
+    var bad := _scan_scene("res://studio/loop.tscn", {})
+    if bad != "":
+        foreign = bad
+        return false
     if not ResourceLoader.exists("res://studio/loop.tscn"):
         return false
     var packed = load("res://studio/loop.tscn") as PackedScene
@@ -2002,6 +2254,10 @@ func _attach_loop() -> bool:
     return _live_matches(loop)
 
 func _begin_fresh(state: Dictionary) -> bool:
+    var bad := _scan_scene("res://studio/loop.tscn", {})
+    if bad != "":
+        foreign = bad
+        return false
     var packed = load("res://studio/loop.tscn") as PackedScene
     if not _packed_matches(packed):
         return false
@@ -2011,13 +2267,10 @@ func _begin_fresh(state: Dictionary) -> bool:
     spawned.name = "Loop"
     add_child(spawned)
     var limit = spawned.get_node_or_null("Limit")
-    state["limit_started"] = Time.get_ticks_msec()
+    state["physics_start"] = Engine.get_physics_frames()
+    state["last_left"] = float(limit.time_left) if limit != null else -1.0
     state["limit_ok"] = _live_matches(spawned) and _limit_matches(limit)
-    if not bool(state["limit_ok"]):
-        return false
-    if limit != null:
-        limit.timeout.connect(_on_limit_timeout)
-    return true
+    return bool(state["limit_ok"])
 
 func _bind(secret: String, host: Node) -> Callable:
     var state := {
@@ -2036,7 +2289,11 @@ func _bind(secret: String, host: Node) -> Callable:
         "door_marked": false,
         "door_y0": 0.0,
         "limit_ok": false,
-        "limit_started": 0,
+        "physics_start": 0,
+        "last_left": -1.0,
+        "saw_key_leave": false,
+        "saw_player_leave": false,
+        "elapsed_frames": 0,
     }
 
     var needed := func(part: String) -> bool:
@@ -2076,25 +2333,6 @@ func _bind(secret: String, host: Node) -> Callable:
             return false
         return true
 
-    var reset_seen := func() -> bool:
-        var again = host.get_node_or_null("Loop")
-        if again == null:
-            return false
-        var body = again.get_node_or_null("Player")
-        var door_node = again.get_node_or_null("Door")
-        var door_shape = again.get_node_or_null("Door/Shape")
-        if body == null or door_node == null or door_shape == null:
-            return false
-        if body.get_node_or_null("Key") != null:
-            return false
-        if again.get_node_or_null("Key") == null:
-            return false
-        if door_shape.disabled:
-            return false
-        if body.position.x > -100.0:
-            return false
-        return abs(door_node.position.y - 168.0) < 12.0
-
     return func(cmd: String) -> bool:
         if state["sealed"]:
             return false
@@ -2102,29 +2340,23 @@ func _bind(secret: String, host: Node) -> Callable:
             state["force_fail"] = true
             return true
         if cmd == "timeout":
-            # The fresh round only. wait_time alone can be rewritten after a short start.
-            if int(state["phase"]) == 3 and bool(state["limit_ok"]) and host._elapsed_ok(int(state["limit_started"])):
-                var fresh = host.get_node_or_null("Loop")
-                if host._live_matches(fresh) and host._wait_still(fresh):
-                    state["timeout_lose"] = true
-                    state["restart"] = true
-                else:
-                    state["force_fail"] = true
-                    return true
-            elif int(state["phase"]) == 3:
-                state["force_fail"] = true
-                return true
-            return satisfied.call()
+            # The Limit signal is not a verdict. Physics frames decide timeout_lose.
+            return false
         if cmd == "finish":
             state["sealed"] = true
             var ok: bool = (not state["force_fail"]) and satisfied.call()
             var kind := "STUDIO " if ok else "STUDIO_FAIL "
+            if int(state.get("elapsed_frames", 0)) > 0:
+                print("physics_frames=%d" % int(state["elapsed_frames"]))
             print("CHECK " + secret + " " + kind + bits_of.call())
             host.get_tree().quit(0 if ok else 1)
             return false
         if cmd != "tick":
             return false
-        if Time.get_ticks_msec() - int(state["started"]) > 20000:
+        if not is_equal_approx(float(Engine.time_scale), 1.0) or int(Engine.physics_ticks_per_second) != 60:
+            state["force_fail"] = true
+            return true
+        if int(state["phase"]) < 3 and Engine.get_physics_frames() > 1200:
             state["force_fail"] = true
             return true
         var loop = host.get_node_or_null("Loop")
@@ -2177,18 +2409,49 @@ func _bind(secret: String, host: Node) -> Callable:
                 phase = 3
                 state["phase"] = phase
                 state["frames"] = 0
-                # The in-game 60 seconds are scored here, in about two seconds of wall clock.
-                Engine.time_scale = 30.0
+                Engine.time_scale = 1.0
+                Engine.physics_ticks_per_second = 60
                 if not host._begin_fresh(state):
+                    if host.foreign != "":
+                        print("unverified script: " + host.foreign)
                     state["force_fail"] = true
                     return true
                 return false
         state["phase"] = phase
-        if phase == 3 and state["timeout_lose"] and not state["restart"] and reset_seen.call():
-            state["restart"] = true
-        if phase == 3 and int(state["frames"]) > 400 and not state["restart"]:
-            state["force_fail"] = true
-            return true
+        if phase == 3:
+            var fresh = host.get_node_or_null("Loop")
+            var limit = fresh.get_node_or_null("Limit") if fresh != null else null
+            var elapsed := Engine.get_physics_frames() - int(state["physics_start"])
+            var budget := int(host.expected_seconds * 60.0)
+            state["elapsed_frames"] = elapsed
+            if not host._live_matches(fresh) or limit == null:
+                state["force_fail"] = true
+                return true
+            var left := float(limit.time_left)
+            if bool(limit.is_stopped()) and elapsed < budget - 8:
+                state["force_fail"] = true
+                return true
+            if float(state["last_left"]) >= 0.0 and left > float(state["last_left"]) + 0.05 and elapsed < budget - 8:
+                state["force_fail"] = true
+                return true
+            state["last_left"] = left
+            var body = fresh.get_node_or_null("Player")
+            var held = fresh.get_node_or_null("Key")
+            if held != null and held.position.distance_to(Vector2(0, 40)) > 12.0:
+                state["saw_key_leave"] = true
+            if body != null and body.position.x < -190.0:
+                state["saw_player_leave"] = true
+            if elapsed < 45:
+                fresh.set("test_axis", Vector2(-1, 0) if elapsed > 15 else Vector2.ZERO)
+            else:
+                fresh.set("test_axis", Vector2.ZERO)
+            if elapsed >= budget:
+                state["timeout_lose"] = true
+            if bool(state["timeout_lose"]) and bool(state["saw_key_leave"]) and bool(state["saw_player_leave"]) and host._back_at_start(fresh):
+                state["restart"] = true
+            if elapsed > budget + 180 and not bool(state["restart"]):
+                state["force_fail"] = true
+                return true
         if not wants_timeout.call() and satisfied.call():
             return true
         if phase == 3 and satisfied.call():

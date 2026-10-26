@@ -678,9 +678,13 @@ class StudioTest(unittest.TestCase):
                 hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest(),
             )
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
-            self.assertIn("timeout.connect", check_text)
-            self.assertIn("time_scale = 30.0", check_text)
+            self.assertNotIn("timeout.connect", check_text)
+            self.assertNotIn("time_scale = 30.0", check_text)
+            self.assertIn("get_physics_frames", check_text)
+            self.assertIn("unverified script:", check_text)
             self.assertIn(studio.loop_body_sha256(), check_text)
+            frame_line = passed_text.split("physics_frames=", 1)[1].split()[0]
+            self.assertGreaterEqual(int(frame_line), 3600)
             self.assertNotIn('get("picked")', check_text)
             self.assertNotIn('get("door_open")', check_text)
             self.assertNotIn('get("won")', check_text)
@@ -1135,8 +1139,8 @@ class StudioTest(unittest.TestCase):
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
             self.assertIn("read_string_from_stdin", check_text)
             self.assertEqual(
-                __import__("re").findall(r"[0-9a-f]{64}", check_text),
-                [studio.loop_body_sha256()],
+                sorted(__import__("re").findall(r"[0-9a-f]{64}", check_text)),
+                sorted([studio.loop_body_sha256(), studio.package_scene_sha256()]),
             )
             directory = studio.ledger_dir()
             rows = studio.read_trusted(directory)
@@ -1186,8 +1190,8 @@ class StudioTest(unittest.TestCase):
             )
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
             self.assertEqual(
-                __import__("re").findall(r"[0-9a-f]{64}", check_text),
-                [studio.loop_body_sha256()],
+                sorted(__import__("re").findall(r"[0-9a-f]{64}", check_text)),
+                sorted([studio.loop_body_sha256(), studio.package_scene_sha256()]),
             )
             directory = studio.ledger_dir()
             rows = studio.read_trusted(directory)
@@ -1351,16 +1355,166 @@ class StudioTest(unittest.TestCase):
                 {"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
             text = _text(result)
             self.assertTrue(result.get("isError"), text)
-            self.assertIn("picked=true", text)
-            self.assertIn("door=true", text)
-            self.assertIn("timeout_lose=false", text)
-            self.assertIn("restart=false", text)
+            self.assertIn("unverified script: res://studio/hurry.gd", text)
+            self.assertIn(
+                "STUDIO_FAIL sound=false picked=false door=false timeout_lose=false restart=false",
+                text)
+            self.assertNotIn("picked=true", text)
             self.assertNotIn("timeout_lose=true", text)
+            self.assertNotIn("restart=true", text)
             self.assertIn("exit=1", text)
             self.assertIn("exit_code=1", text)
             blocked = studio.web_unserved(studio.ledger_dir())
             self.assertIsNotNone(blocked)
             self.assertIn("not served", blocked)
+        finally:
+            tmp.cleanup()
+
+    def test_child_timeout_emit_is_not_a_pass(self):
+        """Official loop.gd, plus a child that stops Limit and emits timeout, is not a pass."""
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(loop.get("isError"), _text(loop))
+            (root / "studio" / "delay.gd").write_text(
+                "extends Node\n"
+                "func _process(_delta: float) -> void:\n"
+                "    var root = get_parent()\n"
+                "    if root == null:\n"
+                "        return\n"
+                "    var limit = root.get_node_or_null(\"Limit\")\n"
+                "    if limit == null:\n"
+                "        return\n"
+                "    limit.stop()\n"
+                "    limit.wait_time = 60.0\n"
+                "    limit.timeout.emit()\n",
+                encoding="utf-8",
+            )
+            scene = (root / "studio" / "loop.tscn").read_text(encoding="utf-8")
+            scene = scene.replace("load_steps=6", "load_steps=7", 1)
+            scene = scene.replace(
+                '[ext_resource type="Script" path="res://studio/loop.gd" id="1"]\n',
+                '[ext_resource type="Script" path="res://studio/loop.gd" id="1"]\n'
+                '[ext_resource type="Script" path="res://studio/delay.gd" id="2"]\n',
+                1,
+            )
+            scene = scene.replace(
+                '[node name="Hud" type="Label" parent="."]\n',
+                '[node name="Delay" type="Node" parent="."]\n'
+                'script = ExtResource("2")\n\n'
+                '[node name="Hud" type="Label" parent="."]\n',
+                1,
+            )
+            (root / "studio" / "loop.tscn").write_text(scene, encoding="utf-8")
+            started = time.monotonic()
+            result = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            elapsed = time.monotonic() - started
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("unverified script: res://studio/delay.gd", text)
+            self.assertIn("timeout_lose=false", text)
+            self.assertNotIn("timeout_lose=true", text)
+            self.assertNotIn("STUDIO sound=true", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
+            self.assertLess(elapsed, 5.0, text)
+            self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
+            web = studio.execute({"tool": "studio", "op": "web"}, str(root), None)
+            web_text = _text(web)
+            self.assertTrue(web.get("isError"), web_text)
+            self.assertIn("not served", web_text)
+            self.assertNotIn("url: http", web_text)
+        finally:
+            tmp.cleanup()
+
+    def test_autoload_embedded_and_inherited_scripts_are_not_a_pass(self):
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(loop.get("isError"), _text(loop))
+            (root / "studio" / "cheat.gd").write_text(
+                "extends Node\nfunc _ready() -> void:\n\tget_tree().quit(0)\n",
+                encoding="utf-8",
+            )
+            project = (root / "project.godot").read_text(encoding="utf-8")
+            (root / "project.godot").write_text(
+                project + '\n[autoload]\nCheat="*res://studio/cheat.gd"\n',
+                encoding="utf-8",
+            )
+            started = time.monotonic()
+            autoload = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            autoload_text = _text(autoload)
+            self.assertLess(time.monotonic() - started, 5.0, autoload_text)
+            self.assertTrue(autoload.get("isError"), autoload_text)
+            self.assertIn("unverified script: res://studio/cheat.gd", autoload_text)
+            self.assertIn("exit_code=1", autoload_text)
+            self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
+
+            project = (root / "project.godot").read_text(encoding="utf-8")
+            cleaned = project.split("\n[autoload]\n", 1)[0]
+            if not cleaned.endswith("\n"):
+                cleaned += "\n"
+            (root / "project.godot").write_text(cleaned, encoding="utf-8")
+            studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            scene = (root / "studio" / "loop.tscn").read_text(encoding="utf-8")
+            scene = scene.replace(
+                "[gd_scene load_steps=6 format=3]\n",
+                "[gd_scene load_steps=7 format=3]\n\n"
+                "[sub_resource type=\"GDScript\" id=\"cheat\"]\n"
+                "script/source = \"extends Node\\nfunc _ready():\\n\\tpass\\n\"\n",
+                1,
+            )
+            (root / "studio" / "loop.tscn").write_text(scene, encoding="utf-8")
+            embedded = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            embedded_text = _text(embedded)
+            self.assertTrue(embedded.get("isError"), embedded_text)
+            self.assertIn("unverified script: res://studio/loop.tscn#GDScript:cheat", embedded_text)
+            self.assertIn("exit_code=1", embedded_text)
+
+            studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            (root / "studio" / "base.gd").write_text("extends Node2D\n", encoding="utf-8")
+            (root / "studio" / "base.tscn").write_text(
+                "[gd_scene load_steps=2 format=3]\n\n"
+                "[ext_resource type=\"Script\" path=\"res://studio/base.gd\" id=\"1\"]\n\n"
+                "[node name=\"Base\" type=\"Node2D\"]\n"
+                "script = ExtResource(\"1\")\n",
+                encoding="utf-8",
+            )
+            (root / "studio" / "loop.tscn").write_text(
+                "[gd_scene load_steps=3 format=3]\n\n"
+                "[ext_resource type=\"PackedScene\" path=\"res://studio/base.tscn\" id=\"1\"]\n"
+                "[ext_resource type=\"Script\" path=\"res://studio/loop.gd\" id=\"2\"]\n\n"
+                "[node name=\"Loop\" instance=ExtResource(\"1\")]\n"
+                "script = ExtResource(\"2\")\n",
+                encoding="utf-8",
+            )
+            inherited = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            inherited_text = _text(inherited)
+            self.assertTrue(inherited.get("isError"), inherited_text)
+            self.assertIn("unverified script: res://studio/base.gd", inherited_text)
+            self.assertIn("exit_code=1", inherited_text)
+            self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
+        finally:
+            tmp.cleanup()
+
+    def test_written_record_matches_the_loop_files(self):
+        tmp, root = _project()
+        try:
+            result = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(result.get("isError"), _text(result))
+            written = studio.load_written()
+            self.assertEqual(
+                written["res://studio/loop.gd"],
+                studio._sha((root / "studio" / "loop.gd").read_bytes()),
+            )
+            self.assertEqual(
+                written["res://studio/loop.tscn"],
+                studio.package_scene_sha256(),
+            )
         finally:
             tmp.cleanup()
 
