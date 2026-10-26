@@ -8,6 +8,7 @@ import io
 import json
 import os
 import struct
+import subprocess
 import tempfile
 import unittest
 import urllib.parse
@@ -27,7 +28,7 @@ def _load(name: str, path: Path):
 
 studio = _load("studio_under_test", ROOT / "bridge" / "studio.py")
 
-GOAL = "Pick up the key and a sound plays and the door opens. If you do not get out in 60 seconds, start over."
+GOAL = studio.EXAMPLE_GOAL
 SECRETS = (
     "supersecretvalue",
     "jsonsecretvalue",
@@ -37,7 +38,7 @@ SECRETS = (
     "slacksecretvalue",
 )
 SECRET_GOAL = (
-    "60 Pick up the key. Bearer supersecretvalue "
+    "60 The key is picked. Bearer supersecretvalue "
     '{"password":"jsonsecretvalue"} API_TOKEN=tokensecretvalue '
     "--password cli-secretvalue https://alice:bobsecret@example.com/a xoxb-slacksecretvalue"
 )
@@ -46,6 +47,71 @@ BOX = [(x, y, z) for x in (0.0, 1.0) for y in (0.0, 2.0) for z in (0.0, 1.0)]
 
 def _text(result: dict) -> str:
     return result["content"][0]["text"]
+
+
+def _slice_lines(text: str, spec: str) -> str:
+    start_s, end_s = spec.split("-", 1)
+    rows = text.splitlines(keepends=True)
+    return "".join(rows[int(start_s) - 1:int(end_s)])
+
+
+def _git_blob(sha: str, source: str) -> str | None:
+    raw = os.environ.get("GAME_EDITOR_UPSTREAM_REPOS", "")
+    for part in raw.split(os.pathsep):
+        if not part:
+            continue
+        root = Path(part)
+        if not (root / ".git").exists():
+            continue
+        probe = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", sha + "^{commit}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if probe.returncode != 0:
+            continue
+        show = subprocess.run(
+            ["git", "-C", str(root), "show", sha + ":" + source],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        if show.returncode == 0:
+            return show.stdout.decode("utf-8")
+    return None
+
+
+def _http_text(url: str) -> str:
+    request = urllib.request.Request(url, headers={"User-Agent": "game-editor-fixture-check"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read().decode("utf-8")
+    except Exception as exc:
+        raise AssertionError("could not open " + url) from exc
+
+
+def _pinned_blob(repo: str, sha: str, source: str) -> str:
+    shown = _git_blob(sha, source)
+    if shown is not None:
+        return shown
+    return _http_text("https://raw.githubusercontent.com/" + repo + "/" + sha + "/" + source)
+
+
+def _catalog_sha_version(plugin: str) -> tuple[str, str]:
+    url = (
+        "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/plugin-catalog/"
+        + plugin + ".yaml"
+    )
+    body = _http_text(url)
+    sha = ""
+    version = ""
+    for line in body.splitlines():
+        if line.startswith("sha:") and not sha:
+            sha = line.split(":", 1)[1].strip().strip('"').strip("'").split()[0]
+        elif line.startswith("version:") and not version:
+            version = line.split(":", 1)[1].strip().strip('"').strip("'").split()[0]
+    if not sha or not version:
+        raise AssertionError("catalog " + plugin + " has no sha or version")
+    return sha, version
 
 
 def _glb(points: list[tuple[float, float, float]]) -> bytes:
@@ -91,6 +157,8 @@ class StudioTest(unittest.TestCase):
         self._hermes = os.environ.get("HERMES_HOME")
         self._home = tempfile.TemporaryDirectory()
         os.environ["HERMES_HOME"] = self._home.name
+        studio._OBSERVED_SUCCESS.clear()
+        studio._GODOT_VERSIONS.clear()
 
     def tearDown(self):
         studio.display_present = self._display
@@ -328,10 +396,17 @@ class StudioTest(unittest.TestCase):
             )
             with (directory / "ledger.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(forged)
-            self.assertEqual(
-                studio.latest_row(studio.read_trusted(directory), studio.test_name(studio.matched_parts(GOAL)))["exit_code"],
-                1,
-            )
+                handle.write(
+                    '{"bits":"sound=true picked=true door=true timeout_lose=true restart=true",'
+                    '"exit_code":0,"godot":"9.9.9.stable","scene":"' + ("ab" * 32) + '",'
+                    '"test":"sound+picked+door+timeout_lose+restart","time":"2020-01-01T00:00:01Z"}\n'
+                )
+            trusted = studio.read_trusted(directory)
+            latest = studio.latest_row(trusted, studio.test_name(studio.matched_parts(GOAL)))
+            self.assertEqual(latest["exit_code"], 1)
+            self.assertFalse(latest["godot"].startswith("9."))
+            self.assertIsNone(studio.fail_pass_pair(trusted))
+            self.assertFalse((directory / "ledger.key").exists())
 
             loop = studio.execute({"tool": "studio", "op": "loop", "goal": SECRET_GOAL}, str(root), None)
             loop_text = _text(loop)
@@ -362,6 +437,11 @@ class StudioTest(unittest.TestCase):
             scene_hash = hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest()
             self.assertEqual(studio.latest_row(passed_rows, name)["scene"], scene_hash)
             self.assertTrue(studio.latest_row(passed_rows, name)["godot"].startswith("4."))
+            self.assertFalse((directory / "ledger.key").exists())
+            check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
+            self.assertNotIn("GAME_EDITOR_LEDGER_KEY", check_text)
+            self.assertNotIn("GAME_EDITOR_LEDGER_KEY", script)
+            self.assertNotIn("ledger.jsonl", check_text)
         finally:
             tmp.cleanup()
 
@@ -390,16 +470,25 @@ class StudioTest(unittest.TestCase):
         tmp, root = _project()
         try:
             before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
-            for goal in ("paint a sunset", "45", ""):
+            for goal in (
+                "paint a sunset", "45", "", "paint the floor", "collect the coin",
+                "try again", "leave in 45 seconds", "doors", "timeout_loser",
+            ):
                 result = studio.execute({"tool": "studio", "op": "test", "goal": goal}, str(root), None)
                 self.assertTrue(result.get("isError"), _text(result))
                 self.assertIn(studio.CANNOT_TEST, _text(result))
+                self.assertNotIn("exit=0", _text(result))
                 with self.assertRaises(studio.Refused):
                     studio.plan_block({"tool": "studio", "op": "loop", "goal": goal}, 1, str(root))
+            self.assertEqual(studio.matched_parts("the key fell"), ("fell",))
+            self.assertEqual(studio.matched_parts("paint the floor"), ())
             after = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
             self.assertEqual(before, after)
             directory = studio.ledger_dir()
             self.assertFalse((directory / "ledger.jsonl").exists())
+            source = (ROOT / "bridge" / "studio.py").read_text(encoding="utf-8")
+            self.assertNotIn("ledger.key", source)
+            self.assertNotIn("GAME_EDITOR_LEDGER_KEY", source)
         finally:
             tmp.cleanup()
 
@@ -469,6 +558,7 @@ class StudioTest(unittest.TestCase):
             "elevenlabs_readme_excerpt.txt": ("cache/generated/audio", "never overwrites"),
         }
         seen = set()
+        catalogs: dict[str, tuple[str, str]] = {}
         for row in pin["excerpts"]:
             seen.add(row["file"])
             text = (fixture_dir / row["file"]).read_text(encoding="utf-8")
@@ -476,11 +566,29 @@ class StudioTest(unittest.TestCase):
             for marker in markers[row["file"]]:
                 self.assertIn(marker, text)
             self.assertEqual(len(row["sha"]), 40)
+            self.assertRegex(row["repo"], r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+            opened = _pinned_blob(row["repo"], row["sha"], row["source"])
+            self.assertEqual(_slice_lines(opened, row["lines"]), text)
+            plugin = row["plugin"]
+            if plugin not in catalogs:
+                catalogs[plugin] = _catalog_sha_version(plugin)
+            catalog_sha, catalog_version = catalogs[plugin]
+            self.assertEqual(catalog_sha, row["sha"])
+            self.assertEqual(catalog_version, row["version"])
         self.assertEqual(seen, set(markers))
+        blobs = {}
         for row in pin["samples"]:
             data = (fixture_dir / row["file"]).read_bytes()
+            blobs[row["file"]] = data
             self.assertEqual(hashlib.sha256(data).hexdigest(), row["sha256"])
             self.assertEqual(len(data), row["bytes"])
+        self.assertNotEqual(blobs["meshy_sample.glb"], blobs["tripo_sample.glb"])
+        meshy_doc, _meshy_bin = studio.parse_glb(blobs["meshy_sample.glb"])
+        tripo_doc, _tripo_bin = studio.parse_glb(blobs["tripo_sample.glb"])
+        self.assertEqual(meshy_doc["asset"]["generator"], "meshy")
+        self.assertNotIn("animations", meshy_doc)
+        self.assertEqual(tripo_doc["asset"]["generator"], "tripo")
+        self.assertTrue(tripo_doc.get("animations"))
         result = json.loads((fixture_dir / "blender_result.json").read_text(encoding="utf-8"))
         self.assertIsInstance(result, dict)
         self.assertIn("location", result)
@@ -506,22 +614,120 @@ class StudioTest(unittest.TestCase):
         finally:
             tmp.cleanup()
 
-    def test_bad_ledger_mac_is_ignored(self):
-        key = "ab" * 32
-        payload = {
+    def test_forged_exit_zero_is_not_a_pass(self):
+        directory = studio.ledger_dir()
+        self.assertIsNotNone(directory)
+        directory.mkdir(parents=True)
+        fail = {
             "bits": "picked=false",
             "exit_code": 1,
             "godot": "4.7.2.stable",
             "scene": "missing",
             "test": "picked",
-            "time": "2026-10-26T00:00:00",
+            "time": "2026-10-26T00:00:00Z",
         }
-        body = studio.canonical_payload(payload)
-        mac = hashlib.sha256((key + "\n" + body).encode("utf-8")).hexdigest()
-        line = body[:-1] + ',"mac":"' + mac + '"}'
-        self.assertIsNotNone(studio.parse_ledger_line(line, key))
-        self.assertIsNone(studio.parse_ledger_line(line, "cd" * 32))
-        self.assertIsNone(studio.fail_pass_pair([{"test": "picked", "exit_code": 1, "bits": "picked=false"}]))
+        forged = {
+            "bits": "picked=true",
+            "exit_code": 0,
+            "godot": "9.9.9.stable",
+            "scene": "ab" * 32,
+            "test": "picked",
+            "time": "2026-10-26T00:00:01Z",
+        }
+        mac_line = studio.canonical_payload(fail)[:-1] + ',"mac":"' + ("ab" * 32) + '"}'
+        self.assertIsNone(studio.parse_ledger_line(mac_line))
+        self.assertIsNotNone(studio.parse_ledger_line(studio.canonical_payload(forged)))
+        (directory / "ledger.jsonl").write_text(
+            studio.canonical_payload(fail) + "\n" + studio.canonical_payload(forged) + "\n",
+            encoding="utf-8",
+        )
+        rows = studio.read_trusted(directory)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["exit_code"], 1)
+        self.assertEqual(rows[0]["godot"], "4.7.2.stable")
+        self.assertIsNone(studio.fail_pass_pair(rows))
+        blocked = studio.open_failure(directory)
+        self.assertIsNotNone(blocked)
+        self.assertEqual(blocked["exit_code"], 1)
+        self.assertFalse((directory / "ledger.key").exists())
+
+    def test_a_ledger_written_during_the_run_is_not_a_pass(self):
+        tmp, root = _project()
+        try:
+            binary = Path(self._home.name) / "godot"
+            binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            binary.chmod(0o755)
+            directory = studio.ledger_dir()
+            self.assertIsNotNone(directory)
+            directory.mkdir(parents=True)
+
+            def fake_run(_cmd, _timeout, extra=None):
+                del extra
+                forged = {
+                    "bits": "picked=true",
+                    "exit_code": 0,
+                    "godot": "9.9.9.stable",
+                    "scene": "missing",
+                    "test": "picked",
+                    "time": "2020-01-01T00:00:00Z",
+                }
+                (directory / "ledger.jsonl").write_text(
+                    studio.canonical_payload(forged) + "\n", encoding="utf-8")
+                return 0, "STUDIO picked=true\n"
+
+            original = studio._run
+            studio._run = fake_run
+            try:
+                result = studio.execute(
+                    {"tool": "studio", "op": "test", "goal": "picked"}, str(root), str(binary))
+            finally:
+                studio._run = original
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("changed outside the godot process", text)
+            self.assertNotIn("9.9.9.stable", text)
+            self.assertEqual(studio.read_trusted(directory), [])
+            self.assertEqual(studio._OBSERVED_SUCCESS, set())
+        finally:
+            tmp.cleanup()
+
+    def test_web_is_not_served_while_a_test_is_failing(self):
+        tmp, root = _project()
+        try:
+            (root / "studio").mkdir()
+            (root / "studio" / "loop.tscn").write_text("; stub\n", encoding="utf-8")
+            directory = studio.ledger_dir()
+            self.assertIsNotNone(directory)
+            directory.mkdir(parents=True)
+            row = {
+                "bits": "picked=false",
+                "exit_code": 1,
+                "godot": "4.7.2.stable",
+                "scene": "missing",
+                "test": "picked",
+                "time": "2026-10-26T00:00:00Z",
+            }
+            (directory / "ledger.jsonl").write_text(studio.canonical_payload(row) + "\n", encoding="utf-8")
+
+            def boom(*_args, **_kwargs):
+                raise AssertionError("template download")
+
+            original = studio.acquire_template
+            studio.acquire_template = boom
+            try:
+                with self.assertRaises(studio.Refused) as raised:
+                    studio.plan_block({"tool": "studio", "op": "web"}, 1, str(root))
+                self.assertIn("not served", str(raised.exception))
+                result = studio._execute_web({"tool": "studio", "op": "web"}, root, "/usr/bin/true")
+            finally:
+                studio.acquire_template = original
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("not served", text)
+            self.assertIn("STUDIO_FAIL", text)
+            self.assertFalse((root / "build" / "web").exists())
+        finally:
+            tmp.cleanup()
 
     def test_plan_approval_then_fail_string(self):
         if studio.find_godot(None) is None:

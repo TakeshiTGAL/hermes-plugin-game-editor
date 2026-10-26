@@ -8,20 +8,19 @@ from __future__ import annotations
 
 import atexit
 import hashlib
-import hmac
 import http.server
 import io
 import json
 import os
 import pwd
 import re
-import secrets
 import stat
 import struct
 import subprocess
 import sys
 import threading
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -68,6 +67,10 @@ _KEYS = {
     "record": {"goal"},
 }
 SERVERS: list = []
+# Canonical payloads of exit 0 rows this process appended after wait() on Godot.
+# A line in the ledger file is not a success by itself. There is no key file.
+_OBSERVED_SUCCESS: set[str] = set()
+_GODOT_VERSIONS: dict[str, str] = {}
 
 
 class Refused(Exception):
@@ -131,21 +134,18 @@ def limit_seconds(goal: str) -> int:
 
 PARTS = ("fell", "sound", "picked", "door", "timeout_lose", "restart")
 CANNOT_TEST = "This sentence cannot be a test."
-PART_PATTERNS = {
-    "fell": re.compile(r"\b(fell|falls?|fallen|floor|dropped|landed)\b", re.I),
-    "sound": re.compile(r"\b(sound|beep|audio)\b", re.I),
-    "picked": re.compile(r"\bpick(?:ed|s)?\s+up\b|\bpicked\b|\bpickup\b|\bcollect(?:ed|s)?\b", re.I),
-    "door": re.compile(r"\bdoors?\b", re.I),
-    "timeout_lose": re.compile(r"\bseconds?\b|\btimeout\b|\btime is up\b|\bdo not get out\b", re.I),
-    "restart": re.compile(r"\bstart over\b|\brestarts?\b|\brestarted\b|\btry again\b", re.I),
-}
+EXAMPLE_GOAL = (
+    "The key is picked and a sound plays and the door opens. "
+    "After 60, timeout_lose, then restart."
+)
+# The part name itself, as a word. floor, seconds, collect and try again are not parts.
+PART_PATTERNS = {name: re.compile(r"\b" + name + r"\b", re.I) for name in PARTS}
 LEDGER_FIELDS = ("bits", "exit_code", "godot", "scene", "test", "time")
 _BITS_TOKEN = re.compile(r"^[a-z_= ]{1,240}$")
 _GODOT_TOKEN = re.compile(r"^[0-9A-Za-z.+_-]{1,40}$")
 _SCENE_TOKEN = re.compile(r"^(?:[0-9a-fA-F]{64}|missing)$")
 _TEST_TOKEN = re.compile(r"^[a-z_+]{1,80}$")
 _TIME_TOKEN = re.compile(r"^[0-9T:.+-Z]{1,40}$")
-_MAC_TOKEN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def matched_parts(goal: str) -> tuple[str, ...]:
@@ -192,33 +192,6 @@ def _ledger_path(directory: Path) -> Path:
     return directory / "ledger.jsonl"
 
 
-def _ledger_key_path(directory: Path) -> Path:
-    return directory / "ledger.key"
-
-
-def ledger_key(directory: Path) -> str:
-    """Key used only to check ledger lines. It is not a ledger line and it is not returned."""
-    path = _ledger_key_path(directory)
-    if path.is_symlink():
-        raise Refused("game-editor: studio refused a symlink ledger key.")
-    if path.is_file():
-        try:
-            key = path.read_text(encoding="utf-8").strip()
-        except (OSError, UnicodeError) as exc:
-            raise Refused("game-editor: the ledger key could not be read.") from exc
-        if _MAC_TOKEN.fullmatch(key):
-            return key
-        raise Refused("game-editor: the ledger key file is not usable.")
-    directory.mkdir(parents=True, exist_ok=True)
-    key = secrets.token_hex(32)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        os.write(fd, (key + "\n").encode("ascii"))
-    finally:
-        os.close(fd)
-    return key
-
-
 def _ledger_text(directory: Path) -> str:
     path = _ledger_path(directory)
     if not path.is_file() or path.is_symlink():
@@ -234,14 +207,14 @@ def canonical_payload(row: dict) -> str:
     return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def parse_ledger_line(line: str, key: str) -> dict | None:
+def parse_ledger_line(line: str) -> dict | None:
     try:
         row = json.loads(line)
     except ValueError:
         return None
     if not isinstance(row, dict):
         return None
-    if set(row) != set(LEDGER_FIELDS) | {"mac"}:
+    if set(row) != set(LEDGER_FIELDS):
         return None
     bits = row.get("bits")
     code = row.get("exit_code")
@@ -249,7 +222,6 @@ def parse_ledger_line(line: str, key: str) -> dict | None:
     scene = row.get("scene")
     name = row.get("test")
     when = row.get("time")
-    mac = row.get("mac")
     if not isinstance(bits, str) or not _BITS_TOKEN.fullmatch(bits):
         return None
     if code not in (0, 1) or isinstance(code, bool):
@@ -262,43 +234,104 @@ def parse_ledger_line(line: str, key: str) -> dict | None:
         return None
     if not isinstance(when, str) or not _TIME_TOKEN.fullmatch(when):
         return None
-    if not isinstance(mac, str) or not _MAC_TOKEN.fullmatch(mac):
-        return None
-    payload = canonical_payload(row)
-    expect = hashlib.sha256((key + "\n" + payload).encode("utf-8")).hexdigest()
-    if not hmac.compare_digest(expect, mac):
-        return None
     return row
 
 
-def trusted_rows(text: str, key: str) -> list[dict]:
+def read_trusted(directory: Path) -> list[dict]:
+    """Failure rows in the file count. An exit 0 counts only after this process waited on Godot."""
     found = []
-    for line in text.splitlines():
-        row = parse_ledger_line(line.strip(), key)
-        if row is not None:
-            found.append(row)
+    for line in _ledger_text(directory).splitlines():
+        row = parse_ledger_line(line.strip())
+        if row is None:
+            continue
+        if row["exit_code"] == 0 and canonical_payload(row) not in _OBSERVED_SUCCESS:
+            continue
+        found.append(row)
     return found
 
 
-def read_trusted(directory: Path) -> list[dict]:
-    path = _ledger_key_path(directory)
-    if not path.is_file() or path.is_symlink():
-        return []
-    try:
-        key = path.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        return []
-    if not _MAC_TOKEN.fullmatch(key):
-        return []
-    return trusted_rows(_ledger_text(directory), key)
-
-
-def suffix_lines(before: str, after: str) -> list[str] | None:
-    """Lines appended during the child. A rewrite is not an append."""
-    if not after.startswith(before):
+def open_failure(directory: Path | None) -> dict | None:
+    """The latest trusted row for a test, when that row is not exit 0."""
+    if directory is None:
         return None
-    extra = after[len(before):]
-    return [line.strip() for line in extra.splitlines() if line.strip()]
+    latest: dict[str, dict] = {}
+    for row in read_trusted(directory):
+        latest[row["test"]] = row
+    for row in latest.values():
+        if row["exit_code"] != 0:
+            return row
+    return None
+
+
+def _append_ledger_row(directory: Path, row: dict, *, success: bool) -> None:
+    path = _ledger_path(directory)
+    if path.is_symlink() or directory.is_symlink():
+        raise Refused("game-editor: studio refused a symlink ledger.")
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = canonical_payload(row)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    try:
+        os.write(fd, (payload + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    if success:
+        _OBSERVED_SUCCESS.add(payload)
+
+
+def _web_blocked(row: dict) -> str:
+    return (
+        "STUDIO_FAIL " + row["bits"] + "\n"
+        f"exit={row['exit_code']}\n"
+        "web is not served until a later exit 0 from the godot process is the latest row for "
+        f"test={row['test']}."
+    )
+
+
+def _utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def godot_version(binary: str) -> str:
+    """The version token from `godot --version`, not a string the project script prints."""
+    cached = _GODOT_VERSIONS.get(binary)
+    if cached:
+        return cached
+    _code, output = _run([binary, "--version"], 20)
+    token = "unknown"
+    for piece in output.replace(",", " ").split():
+        if piece and piece[0].isdigit() and _GODOT_TOKEN.fullmatch(piece):
+            token = piece
+            break
+    _GODOT_VERSIONS[binary] = token
+    return token
+
+
+def scene_hash(root: Path) -> str:
+    path = root / "studio" / "loop.tscn"
+    if not path.is_file() or path.is_symlink():
+        return "missing"
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _bits_from_line(line: str, parts: tuple[str, ...]) -> str:
+    raw = ""
+    if line.startswith("STUDIO_FAIL "):
+        raw = line[len("STUDIO_FAIL "):].strip()
+    elif line.startswith("STUDIO "):
+        raw = line[len("STUDIO "):].strip()
+    if raw and _BITS_TOKEN.fullmatch(raw):
+        return raw
+    return " ".join(f"{part}=false" for part in parts)
+
+
+def _parts_all_true(bits: str, parts: tuple[str, ...]) -> bool:
+    flags: dict[str, str] = {}
+    for piece in bits.split():
+        name, sep, value = piece.partition("=")
+        if not sep or not name:
+            return False
+        flags[name] = value
+    return all(flags.get(part) == "true" for part in parts)
 
 
 def latest_row(rows: list[dict], name: str) -> dict | None:
@@ -1127,7 +1160,11 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             f"writes res://studio/check.gd for {', '.join(parts)} and runs it. It does not write the loop."
         )
         lines.append("A missing loop prints STUDIO_FAIL and exits non-zero.")
-        lines.append("The Godot process appends the ledger row. This step does not.")
+        lines.append(
+            "After that process exits, this bridge appends the ledger row. "
+            "The exit code is that process's return code. The Godot process does not write the row "
+            "and is not given a ledger key."
+        )
     elif op == "loop":
         parts = require_parts(goal)
         files = {
@@ -1150,6 +1187,9 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
         )
         lines.append("CREDITS " + _credits_line("game-editor", "studio/loop.gd", "MIT"))
     elif op == "web":
+        blocked = open_failure(ledger_dir())
+        if blocked is not None:
+            raise Refused(_web_blocked(blocked))
         if not (base / "studio" / "loop.tscn").is_file():
             raise Refused("game-editor: studio op web needs res://studio/loop.tscn. Plan studio op loop first.")
         web = base / "build" / "web"
@@ -1171,6 +1211,7 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
         lines.append("stops the previous 127.0.0.1 page before this export.")
         lines.append("template cache: plugin-data/game-editor/export-templates")
         lines.append("serves on 127.0.0.1 only. It does not upload.")
+        lines.append("does not serve while the latest ledger row for a test is not exit 0.")
     elif op == "import_asset":
         source = _resolve_import(base, step["path"])
         suffix = source.suffix.lower()
@@ -1227,15 +1268,13 @@ def guide(op: str | None) -> dict:
         lines.append("- import_asset: copy a GLB or audio file, fix a mesh, append one CREDITS line.")
         lines.append("- record: Movie Maker when a display exists, otherwise not recorded.")
         lines.append(
-            'example step: {"tool": "studio", "op": "test", "goal": '
-            '"Pick up the key and a sound plays and the door opens. '
-            'If you do not get out in 60 seconds, start over."}'
+            "example step: " + json.dumps({"tool": "studio", "op": "test", "goal": EXAMPLE_GOAL})
         )
-        lines.append("A sentence that matches no part is not a test.")
+        lines.append("A sentence that names none of those parts as a whole word is not a test.")
         return _ok("\n".join(lines))
     if op not in STUDIO_OPS:
         return _err(f"game-editor: studio has no op {op!r}; ops: {', '.join(STUDIO_OPS)}.")
-    example = {"tool": "studio", "op": op, "goal": "Pick up the key and a sound plays and the door opens. 60 seconds."}
+    example = {"tool": "studio", "op": op, "goal": EXAMPLE_GOAL}
     if op == "import_asset":
         example["path"] = "res://assets/hero.glb"
     if op == "web":
@@ -1253,41 +1292,8 @@ def _write_files(root: Path, files: dict[str, bytes]) -> None:
         _write(root, relative, data)
 
 
-def _ledger_child(directory: Path | None) -> tuple[dict[str, str], str, str]:
-    """Environment for the Godot process. The parent does not write ledger.jsonl."""
-    if directory is None:
-        return {}, "", ""
-    directory.mkdir(parents=True, exist_ok=True)
-    key = ledger_key(directory)
-    before = _ledger_text(directory)
-    return {
-        "GAME_EDITOR_LEDGER_DIR": str(directory),
-        "GAME_EDITOR_LEDGER_KEY": key,
-    }, key, before
-
-
-def _judge_test(line: str, code: int, new_rows: list[dict], all_rows: list[dict], name: str, have_dir: bool) -> tuple[bool, str]:
-    if not have_dir:
-        return False, "ledger: HERMES_HOME is unset"
-    fresh = [row for row in new_rows if row["test"] == name and row["exit_code"] == (0 if code == 0 else 1)]
-    latest = latest_row(all_rows, name)
-    if not fresh or latest is None:
-        return False, "ledger: no row from this process"
-    note = (
-        f"ledger: godot={latest['godot']} test={latest['test']} "
-        f"scene={latest['scene']} exit_code={latest['exit_code']} time={latest['time']}"
-    )
-    ok = (
-        code == 0
-        and line.startswith("STUDIO ")
-        and not line.startswith("STUDIO_FAIL")
-        and latest["exit_code"] == 0
-        and fresh[-1]["exit_code"] == 0
-    )
-    return ok, note
-
-
 def _execute_test(step: dict, root: Path, godot: str) -> dict:
+    """Run the packaged check. This process appends the one ledger row after wait()."""
     parts = require_parts(step.get("goal") or "")
     name = test_name(parts)
     files = {
@@ -1300,12 +1306,11 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         files["project.godot"] = _project_text("", None).encode("utf-8")
     before = _names(root)
     directory = ledger_dir()
-    extra, key, before_ledger = _ledger_child(directory)
+    before_ledger = _ledger_text(directory) if directory is not None else None
     _write_files(root, files)
     code, output = _run(
         [godot, "--headless", "--path", str(root), "res://studio/check.tscn"],
         40,
-        extra or None,
     )
     if created_project:
         _write(root, "project.godot", files["project.godot"])
@@ -1313,18 +1318,42 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         _write(root, "project.godot", before_project.encode("utf-8"))
     _sweep(root, before, ("studio/",))
     line = _studio_line(output)
-    new_rows: list[dict] = []
-    all_rows: list[dict] = []
-    if directory is not None and key:
-        after = _ledger_text(directory)
-        added = suffix_lines(before_ledger, after)
-        if added is not None:
-            new_rows = [row for row in (parse_ledger_line(item, key) for item in added) if row is not None]
-        all_rows = trusted_rows(after, key) if added is not None else []
-    ok, note = _judge_test(line, code, new_rows, all_rows, name, directory is not None)
-    shown = line or "STUDIO_FAIL no-verdict"
-    reply = f"{shown}\nexit={code}\n{note}\nplan_digest: {plan_digest(step)}"
-    return _ok(reply) if ok else _err(reply)
+    bits = _bits_from_line(line, parts)
+    if directory is None:
+        shown = line if line.startswith("STUDIO_FAIL ") else ("STUDIO_FAIL " + bits)
+        reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME is unset\nplan_digest: {plan_digest(step)}"
+        return _err(reply)
+    tampered = _ledger_text(directory) != before_ledger
+    passed = (
+        code == 0
+        and line.startswith("STUDIO ")
+        and not line.startswith("STUDIO_FAIL")
+        and not tampered
+        and _parts_all_true(bits, parts)
+    )
+    if tampered:
+        note = "ledger: changed outside the godot process"
+    else:
+        row = {
+            "bits": bits,
+            "exit_code": 0 if passed else 1,
+            "godot": godot_version(godot),
+            "scene": scene_hash(root),
+            "test": name,
+            "time": _utc_stamp(),
+        }
+        _append_ledger_row(directory, row, success=passed)
+        note = (
+            f"ledger: godot={row['godot']} test={row['test']} "
+            f"scene={row['scene']} exit_code={row['exit_code']} time={row['time']}"
+        )
+    if passed:
+        reply = f"{line}\nexit=0\n{note}\nplan_digest: {plan_digest(step)}"
+        return _ok(reply)
+    shown = line if line.startswith("STUDIO_FAIL ") else ("STUDIO_FAIL " + bits)
+    shown_exit = code if code not in (0, None) else 1
+    reply = f"{shown}\nexit={shown_exit}\n{note}\nplan_digest: {plan_digest(step)}"
+    return _err(reply)
 
 
 def _execute_loop(step: dict, root: Path) -> dict:
@@ -1404,6 +1433,9 @@ def _execute_web(step: dict, root: Path, godot: str) -> dict:
     stop_servers()
     if not (root / "studio" / "loop.tscn").is_file():
         raise Refused("game-editor: studio op web needs res://studio/loop.tscn. Plan studio op loop first.")
+    blocked = open_failure(ledger_dir())
+    if blocked is not None:
+        return _err(_web_blocked(blocked))
     web = root / "build" / "web"
     if web.is_dir() and any(web.iterdir()) and step.get("overwrite") is not True:
         raise Refused("game-editor: build/web already has files. Pass overwrite true.")
@@ -1499,6 +1531,8 @@ def execute(step: dict, root: str, godot: str | None) -> dict:
     try:
         op = _check_step(step)
         base = _root_path(root)
+        if op in ("test", "loop"):
+            require_parts(step.get("goal") or "")
         if op == "loop":
             return _execute_loop(step, base)
         if op == "import_asset":
@@ -1776,33 +1810,6 @@ func _satisfied() -> bool:
         return false
     return true
 
-func _ledger(code: int, bits: String) -> void:
-    var dir := OS.get_environment("GAME_EDITOR_LEDGER_DIR")
-    var key := OS.get_environment("GAME_EDITOR_LEDGER_KEY")
-    if dir == "" or key == "":
-        return
-    var scene_hash := "missing"
-    if FileAccess.file_exists("res://studio/loop.tscn"):
-        scene_hash = FileAccess.get_sha256("res://studio/loop.tscn")
-    var info := Engine.get_version_info()
-    var godot_version := "%s.%s.%s.%s" % [info.major, info.minor, info.patch, info.status]
-    var when := Time.get_datetime_string_from_system(false, false)
-    var payload := '{"bits":"%s","exit_code":%s,"godot":"%s","scene":"%s","test":"%s","time":"%s"}' % [bits, str(code), godot_version, scene_hash, test_name, when]
-    var mac := (key + "\n" + payload).sha256_text()
-    var line := payload.substr(0, payload.length() - 1) + ',"mac":"%s"}\n' % mac
-    var path := dir.path_join("ledger.jsonl")
-    var fh = null
-    if FileAccess.file_exists(path):
-        fh = FileAccess.open(path, FileAccess.READ_WRITE)
-        if fh:
-            fh.seek_end()
-    if fh == null:
-        fh = FileAccess.open(path, FileAccess.WRITE)
-    if fh == null:
-        return
-    fh.store_string(line)
-    fh.close()
-
 func _ready() -> void:
     started = Time.get_ticks_msec()
     if not ResourceLoader.exists("res://studio/loop.tscn"):
@@ -1873,8 +1880,6 @@ func _finish(ok: bool) -> void:
     finished = true
     Engine.time_scale = 1.0
     var bits := _bits()
-    var code := 0 if ok else 1
-    _ledger(code, bits)
     if ok:
         print("STUDIO " + bits)
         get_tree().quit(0)

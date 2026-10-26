@@ -17,8 +17,8 @@ The check scores only the parts the sentence matched. The model does not write t
 
 `fell=true` means the body has settled on the floor. `sound=true` means a player was observed playing, including a generated beep. `picked=true` means the pickup happened. `door=true` means the door is open and its collision shape is disabled. `timeout_lose=true` means the timer ended the round. `restart=true` means the round started over.
 
-The sentence `Pick up the key and a sound plays and the door opens. If you do not get out in 60 seconds, start over.` matches `sound`, `picked`, `door`, `timeout_lose` and `restart`. It does not match `fell`.
+The sentence `The key is picked and a sound plays and the door opens. After 60, timeout_lose, then restart.` matches `sound`, `picked`, `door`, `timeout_lose` and `restart`. It does not match `fell`. The part name has to be that whole word. `paint the floor`, a count of seconds, `collect` and `try again` match nothing.
 
-A test that has failed is not a pass until a later run of that same test exits 0. The Godot process appends that row. The row is not a project file.
+A test that has failed is not a pass until a later run of that same test exits 0. After Godot exits, the bridge appends that row. The exit code is that process's return code. The Godot process does not write the file and is not given a ledger key. A row the bridge did not append after that wait is not a pass. The row is not a project file.
 
 `docs/verdict.json` is the same contract in one object.

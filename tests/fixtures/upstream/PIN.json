@@ -4,6 +4,7 @@
       "plugin": "meshy",
       "version": "0.5.0",
       "sha": "e746f4c690d7b9855e8cf06485ed6ac906b66e12",
+      "repo": "NousResearch/hermes-official-plugins",
       "source": "meshy/skills/meshy-3d/SKILL.md",
       "lines": "202-223",
       "file": "meshy_skill_excerpt.txt",
@@ -13,6 +14,7 @@
       "plugin": "hermes-tripo",
       "version": "0.4.0",
       "sha": "09b26f6b3b2662a0fe86dc782283bc4cddf7a196",
+      "repo": "Adolanium/hermes-tripo",
       "source": "skills/workflow/SKILL.md",
       "lines": "60-61",
       "file": "tripo_video_excerpt.txt",
@@ -22,6 +24,7 @@
       "plugin": "hermes-tripo",
       "version": "0.4.0",
       "sha": "09b26f6b3b2662a0fe86dc782283bc4cddf7a196",
+      "repo": "Adolanium/hermes-tripo",
       "source": "skills/workflow/SKILL.md",
       "lines": "201-201",
       "file": "tripo_godot_excerpt.txt",
@@ -31,6 +34,7 @@
       "plugin": "blender",
       "version": "0.4.1",
       "sha": "9b11ffeda84b077bea9de52d22733c7a41ca581a",
+      "repo": "NousResearch/hermes-official-plugins",
       "source": "blender/skills/blender/SKILL.md",
       "lines": "90-96",
       "file": "blender_skill_excerpt.txt",
@@ -40,6 +44,7 @@
       "plugin": "blender",
       "version": "0.4.1",
       "sha": "9b11ffeda84b077bea9de52d22733c7a41ca581a",
+      "repo": "NousResearch/hermes-official-plugins",
       "source": "blender/README.md",
       "lines": "46-46",
       "file": "blender_readme_excerpt.txt",
@@ -49,6 +54,7 @@
       "plugin": "elevenlabs-sound-effects",
       "version": "1.2.0",
       "sha": "e4e40398c4d46f86dba3bbdcbfa5ef02d2675988",
+      "repo": "NousResearch/hermes-official-plugins",
       "source": "elevenlabs-sound-effects/skills/elevenlabs-sound-design/SKILL.md",
       "lines": "93-125",
       "file": "elevenlabs_skill_excerpt.txt",
@@ -58,6 +64,7 @@
       "plugin": "elevenlabs-sound-effects",
       "version": "1.2.0",
       "sha": "e4e40398c4d46f86dba3bbdcbfa5ef02d2675988",
+      "repo": "NousResearch/hermes-official-plugins",
       "source": "elevenlabs-sound-effects/README.md",
       "lines": "71-72",
       "file": "elevenlabs_readme_excerpt.txt",
@@ -67,13 +74,13 @@
   "samples": [
     {
       "file": "meshy_sample.glb",
-      "sha256": "09c6f225a8c5c1f9f388c62f410696e6c54fc1eb829ef79fcb771b937c3b2f2f",
-      "bytes": 432
+      "sha256": "5bf3bd53f0be45b435137afd6e356795a7ec149ad62a764375448d93330cd50f",
+      "bytes": 452
     },
     {
       "file": "tripo_sample.glb",
-      "sha256": "09c6f225a8c5c1f9f388c62f410696e6c54fc1eb829ef79fcb771b937c3b2f2f",
-      "bytes": 432
+      "sha256": "3c9db50db92c8577de4efd7514d44fe06af282d773ec22c5b4fd249e1b3a15bf",
+      "bytes": 512
     },
     {
       "file": "blender_sample.blend",
