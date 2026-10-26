@@ -30,6 +30,160 @@ def _load(name: str, path: Path):
 studio = _load("studio_under_test", ROOT / "bridge" / "studio.py")
 
 GOAL = studio.EXAMPLE_GOAL
+
+_CHEAT_GD = """extends Node2D
+
+var _frames := 0
+var _armed := false
+
+func _ready() -> void:
+    $Limit.one_shot = true
+    $Limit.wait_time = 0.05
+    $Limit.start()
+
+func _process(_delta: float) -> void:
+    if _armed and $Beep.playing:
+        var playback = $Beep.get_stream_playback()
+        if playback:
+            for _i in 8:
+                playback.push_frame(Vector2(0.2, 0.2))
+    _frames += 1
+    if _armed or _frames < 40:
+        return
+    _armed = true
+    var key: RigidBody2D = $Key
+    key.freeze = true
+    key.linear_velocity = Vector2.ZERO
+    key.reparent($Player)
+    key.position = Vector2(0, -18)
+    var gen := AudioStreamGenerator.new()
+    gen.mix_rate = 22050.0
+    gen.buffer_length = 0.4
+    $Beep.stream = gen
+    $Beep.play()
+    $Door/Shape.disabled = true
+    $Door.position.y -= 90.0
+    $Player.global_position = $Exit.global_position
+"""
+
+_CHEAT_TSCN = """[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://studio/cheat.gd" id="1"]
+
+[sub_resource type="RectangleShape2D" id="floor"]
+size = Vector2(520, 40)
+
+[sub_resource type="CircleShape2D" id="key"]
+radius = 8.0
+
+[sub_resource type="RectangleShape2D" id="body"]
+size = Vector2(18, 28)
+
+[sub_resource type="RectangleShape2D" id="door"]
+size = Vector2(16, 64)
+
+[node name="Loop" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Floor" type="StaticBody2D" parent="."]
+position = Vector2(0, 220)
+
+[node name="Shape" type="CollisionShape2D" parent="Floor"]
+shape = SubResource("floor")
+
+[node name="Key" type="RigidBody2D" parent="."]
+position = Vector2(0, 200)
+gravity_scale = 0.0
+lock_rotation = true
+
+[node name="Shape" type="CollisionShape2D" parent="Key"]
+shape = SubResource("key")
+
+[node name="Player" type="CharacterBody2D" parent="."]
+position = Vector2(-180, 168)
+
+[node name="Shape" type="CollisionShape2D" parent="Player"]
+shape = SubResource("body")
+
+[node name="Door" type="StaticBody2D" parent="."]
+position = Vector2(150, 168)
+
+[node name="Shape" type="CollisionShape2D" parent="Door"]
+shape = SubResource("door")
+
+[node name="Exit" type="Area2D" parent="."]
+position = Vector2(210, 168)
+
+[node name="Shape" type="CollisionShape2D" parent="Exit"]
+shape = SubResource("body")
+
+[node name="Beep" type="AudioStreamPlayer" parent="."]
+
+[node name="Limit" type="Timer" parent="."]
+
+[node name="Hud" type="Label" parent="."]
+offset_left = -200.0
+offset_top = 8.0
+offset_right = 200.0
+offset_bottom = 32.0
+"""
+
+_HURRY_GD = """extends Node
+
+var frames := 0
+var armed := false
+var shortened := false
+
+func _process(_delta: float) -> void:
+    var root = get_parent()
+    if root == null:
+        return
+    # The check raises time_scale only for the fresh round.
+    var limit = root.get_node_or_null("Limit")
+    if Engine.time_scale >= 10.0:
+        if shortened or limit == null:
+            return
+        shortened = true
+        limit.one_shot = true
+        limit.wait_time = 0.05
+        limit.start()
+        limit.wait_time = 60.0
+        return
+    var key = root.get_node_or_null("Key")
+    if key != null and key.get_parent() == root and key.position.y < 190.0:
+        key.position = Vector2(0, 200)
+        key.linear_velocity = Vector2.ZERO
+    frames += 1
+    if armed or frames < 30:
+        return
+    armed = true
+    if key != null and key.get_parent() == root:
+        key.freeze = true
+        key.linear_velocity = Vector2.ZERO
+        key.reparent(root.get_node("Player"))
+        key.position = Vector2(0, -18)
+    var beep = root.get_node_or_null("Beep")
+    if beep != null:
+        var gen := AudioStreamGenerator.new()
+        gen.mix_rate = 22050.0
+        gen.buffer_length = 0.4
+        beep.stream = gen
+        beep.play()
+        var playback = beep.get_stream_playback()
+        if playback:
+            for _i in 8:
+                playback.push_frame(Vector2(0.2, 0.2))
+    var shape = root.get_node_or_null("Door/Shape")
+    var door = root.get_node_or_null("Door")
+    if shape != null:
+        shape.disabled = true
+    if door != null:
+        door.position.y -= 90.0
+    var player = root.get_node_or_null("Player")
+    var exit_node = root.get_node_or_null("Exit")
+    if player != null and exit_node != null:
+        player.global_position = exit_node.global_position
+"""
 SECRETS = (
     "supersecretvalue",
     "jsonsecretvalue",
@@ -1122,6 +1276,91 @@ class StudioTest(unittest.TestCase):
             self.assertEqual(__import__("re").findall(r"[0-9a-f]{64}", text), [scene])
             self.assertEqual(studio.read_trusted(studio.ledger_dir())[-1]["exit_code"], 1)
             self.assertEqual(studio.read_trusted(studio.ledger_dir())[-1]["scene"], scene)
+        finally:
+            tmp.cleanup()
+
+    def test_swapped_scene_script_is_not_a_pass(self):
+        """Official loop.gd on disk, another script on the scene root, is not a pass."""
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            studio_dir = root / "studio"
+            studio_dir.mkdir()
+            (studio_dir / "loop.gd").write_text(studio.LOOP_GD, encoding="utf-8")
+            (studio_dir / "cheat.gd").write_text(_CHEAT_GD, encoding="utf-8")
+            (studio_dir / "loop.tscn").write_text(_CHEAT_TSCN, encoding="utf-8")
+            self.assertTrue(studio.is_package_loop(root))
+            started = time.monotonic()
+            result = studio.execute(
+                {"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            elapsed = time.monotonic() - started
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn(
+                "STUDIO_FAIL sound=false picked=false door=false timeout_lose=false restart=false",
+                text)
+            self.assertNotIn("sound=true", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
+            self.assertLess(elapsed, 5.0, text)
+            blocked = studio.web_unserved(studio.ledger_dir())
+            self.assertIsNotNone(blocked)
+            self.assertIn("not served", blocked)
+            web = studio.execute({"tool": "studio", "op": "web"}, str(root), None)
+            web_text = _text(web)
+            self.assertTrue(web.get("isError"), web_text)
+            self.assertIn("not served", web_text)
+            self.assertNotIn("url: http", web_text)
+            check_text = (studio_dir / "check.gd").read_text(encoding="utf-8")
+            self.assertIn("res://studio/loop.gd", check_text)
+            self.assertIn("expected_seconds := 60.0", check_text)
+            self.assertIn("time_left", check_text)
+            self.assertNotIn("restarted", check_text)
+        finally:
+            tmp.cleanup()
+
+    def test_short_limit_on_the_package_script_is_not_a_pass(self):
+        """The package script on the root, with a 0.05 second fresh Limit, is not a pass."""
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            studio_dir = root / "studio"
+            studio_dir.mkdir()
+            (studio_dir / "loop.gd").write_text(studio.LOOP_GD, encoding="utf-8")
+            (studio_dir / "hurry.gd").write_text(_HURRY_GD, encoding="utf-8")
+            scene = studio.LOOP_TSCN.replace("load_steps=6", "load_steps=7", 1)
+            scene = scene.replace(
+                '[ext_resource type="Script" path="res://studio/loop.gd" id="1"]\n',
+                '[ext_resource type="Script" path="res://studio/loop.gd" id="1"]\n'
+                '[ext_resource type="Script" path="res://studio/hurry.gd" id="2"]\n',
+                1,
+            )
+            scene = scene.replace(
+                '[node name="Hud" type="Label" parent="."]\n',
+                '[node name="Hurry" type="Node" parent="."]\n'
+                'script = ExtResource("2")\n\n'
+                '[node name="Hud" type="Label" parent="."]\n',
+                1,
+            )
+            (studio_dir / "loop.tscn").write_text(scene, encoding="utf-8")
+            self.assertTrue(studio.is_package_loop(root))
+            self.assertIn('path="res://studio/loop.gd"', scene)
+            result = studio.execute(
+                {"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("picked=true", text)
+            self.assertIn("door=true", text)
+            self.assertIn("timeout_lose=false", text)
+            self.assertIn("restart=false", text)
+            self.assertNotIn("timeout_lose=true", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
+            blocked = studio.web_unserved(studio.ledger_dir())
+            self.assertIsNotNone(blocked)
+            self.assertIn("not served", blocked)
         finally:
             tmp.cleanup()
 

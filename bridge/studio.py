@@ -425,13 +425,14 @@ def verdict_line(row: dict) -> str:
     return prefix + row["bits"]
 
 
-def _check_script(parts: tuple[str, ...]) -> str:
+def _check_script(parts: tuple[str, ...], seconds: int) -> str:
     quoted = ", ".join(json.dumps(part) for part in parts)
     return (
         CHECK_GD_TEMPLATE
         .replace("__PARTS__", quoted)
         .replace("__TEST_NAME__", test_name(parts))
         .replace("__LOOP_BODY_SHA256__", loop_body_sha256())
+        .replace("__EXPECTED_SECONDS__", f"{int(seconds)}.0")
     )
 
 
@@ -1242,7 +1243,7 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
     if op == "test":
         parts = require_parts(goal)
         files = {
-            "studio/check.gd": _check_script(parts).encode("utf-8"),
+            "studio/check.gd": _check_script(parts, limit_seconds(goal)).encode("utf-8"),
             "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
         }
         losses.extend(_losses_for(base, files))
@@ -1257,7 +1258,9 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
         )
         lines.append(
             "It scores the key becoming a child of the player and the Limit timer firing, "
-            "not flags the loop assigns. A loop.gd this package did not write is not a pass. "
+            "not flags the loop assigns. The running root has to be the loop.gd this package wrote. "
+            "Keeping that file and attaching another script is not a pass. "
+            "The fresh Limit counts only when it starts at the sentence's seconds, so a 0.05 second timer is not that timeout. "
             "After the win, Engine.time_scale is 30, so the in-game 60 seconds finish in about two seconds of wall clock. "
             "The scene hash covers loop.tscn and loop.gd."
         )
@@ -1404,7 +1407,7 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
     # The check reads it from stdin before it adds the loop. A loop print cannot carry it.
     nonce = secrets.token_hex(32)
     files = {
-        "studio/check.gd": _check_script(parts).encode("utf-8"),
+        "studio/check.gd": _check_script(parts, limit_seconds(step.get("goal") or "")).encode("utf-8"),
         "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
         "project.godot": _project_text("", "res://studio/check.tscn").encode("utf-8"),
     }
@@ -1873,6 +1876,7 @@ CHECK_GD_TEMPLATE = """extends Node
 var required := PackedStringArray([__PARTS__])
 var test_name := "__TEST_NAME__"
 var expected_loop := "__LOOP_BODY_SHA256__"
+var expected_seconds := __EXPECTED_SECONDS__
 var _emit: Callable
 var _done := false
 
@@ -1886,12 +1890,10 @@ func _ready() -> void:
         if _emit.call("reject"):
             _seal()
         return
-    if not ResourceLoader.exists("res://studio/loop.tscn"):
-        _seal()
+    if not _attach_loop():
+        if _emit.call("reject"):
+            _seal()
         return
-    var loop = load("res://studio/loop.tscn").instantiate()
-    loop.name = "Loop"
-    add_child(loop)
 
 func _process(_delta: float) -> void:
     if _done or not _emit.is_valid():
@@ -1918,10 +1920,7 @@ func _seal() -> void:
     else:
         get_tree().quit(1)
 
-func _loop_body_sha() -> String:
-    if not FileAccess.file_exists("res://studio/loop.gd"):
-        return ""
-    var text := FileAccess.get_file_as_string("res://studio/loop.gd")
+func _sha_text(text: String) -> String:
     var lines := text.split("\\n")
     var out: PackedStringArray = []
     for line in lines:
@@ -1935,6 +1934,90 @@ func _loop_body_sha() -> String:
     ctx.start(HashingContext.HASH_SHA256)
     ctx.update("\\n".join(out).to_utf8_buffer())
     return ctx.finish().hex_encode().to_lower()
+
+func _loop_body_sha() -> String:
+    if not FileAccess.file_exists("res://studio/loop.gd"):
+        return ""
+    return _sha_text(FileAccess.get_file_as_string("res://studio/loop.gd"))
+
+func _packed_matches(packed: PackedScene) -> bool:
+    if packed == null:
+        return false
+    var state := packed.get_state()
+    if state == null or state.get_node_count() < 1:
+        return false
+    if str(state.get_node_path(0)) != ".":
+        return false
+    var script = null
+    for i in state.get_node_property_count(0):
+        if str(state.get_node_property_name(0, i)) == "script":
+            script = state.get_node_property_value(0, i)
+            break
+    if script == null:
+        return false
+    var path := str(script.resource_path)
+    var source := str(script.source_code)
+    if path != "res://studio/loop.gd":
+        return false
+    return _sha_text(source) == expected_loop
+
+func _live_matches(node) -> bool:
+    if node == null:
+        return false
+    var script = node.get_script()
+    if script == null:
+        return false
+    return str(script.resource_path) == "res://studio/loop.gd"
+
+func _limit_matches(limit) -> bool:
+    if limit == null:
+        return false
+    if not is_equal_approx(float(limit.wait_time), expected_seconds):
+        return false
+    return float(limit.time_left) >= expected_seconds - 0.5
+
+func _wait_still(node) -> bool:
+    if node == null:
+        return false
+    var limit = node.get_node_or_null("Limit")
+    if limit == null:
+        return false
+    return is_equal_approx(float(limit.wait_time), expected_seconds)
+
+func _elapsed_ok(started: int) -> bool:
+    var need := int(expected_seconds / 30.0 * 750.0)
+    return Time.get_ticks_msec() - started >= need
+
+func _attach_loop() -> bool:
+    if not ResourceLoader.exists("res://studio/loop.tscn"):
+        return false
+    var packed = load("res://studio/loop.tscn") as PackedScene
+    if not _packed_matches(packed):
+        return false
+    var loop = packed.instantiate()
+    if not _live_matches(loop):
+        return false
+    loop.name = "Loop"
+    add_child(loop)
+    return _live_matches(loop)
+
+func _begin_fresh(state: Dictionary) -> bool:
+    var packed = load("res://studio/loop.tscn") as PackedScene
+    if not _packed_matches(packed):
+        return false
+    var spawned = packed.instantiate()
+    if not _live_matches(spawned):
+        return false
+    spawned.name = "Loop"
+    add_child(spawned)
+    var limit = spawned.get_node_or_null("Limit")
+    state["limit_started"] = Time.get_ticks_msec()
+    state["limit_ok"] = _live_matches(spawned) and _limit_matches(limit)
+    if not bool(state["limit_ok"]):
+        return false
+    if limit != null:
+        limit.timeout.connect(_on_limit_timeout)
+    return true
 
 func _bind(secret: String, host: Node) -> Callable:
     var state := {
@@ -1952,6 +2035,8 @@ func _bind(secret: String, host: Node) -> Callable:
         "loose": false,
         "door_marked": false,
         "door_y0": 0.0,
+        "limit_ok": false,
+        "limit_started": 0,
     }
 
     var needed := func(part: String) -> bool:
@@ -2017,13 +2102,18 @@ func _bind(secret: String, host: Node) -> Callable:
             state["force_fail"] = true
             return true
         if cmd == "timeout":
-            # This signal is connected only on the fresh round, after the win.
-            if int(state["phase"]) == 3:
-                state["timeout_lose"] = true
-                state["restart"] = true
-            elif reset_seen.call():
-                state["timeout_lose"] = true
-                state["restart"] = true
+            # The fresh round only. wait_time alone can be rewritten after a short start.
+            if int(state["phase"]) == 3 and bool(state["limit_ok"]) and host._elapsed_ok(int(state["limit_started"])):
+                var fresh = host.get_node_or_null("Loop")
+                if host._live_matches(fresh) and host._wait_still(fresh):
+                    state["timeout_lose"] = true
+                    state["restart"] = true
+                else:
+                    state["force_fail"] = true
+                    return true
+            elif int(state["phase"]) == 3:
+                state["force_fail"] = true
+                return true
             return satisfied.call()
         if cmd == "finish":
             state["sealed"] = true
@@ -2089,12 +2179,9 @@ func _bind(secret: String, host: Node) -> Callable:
                 state["frames"] = 0
                 # The in-game 60 seconds are scored here, in about two seconds of wall clock.
                 Engine.time_scale = 30.0
-                var spawned = load("res://studio/loop.tscn").instantiate()
-                spawned.name = "Loop"
-                var limit = spawned.get_node_or_null("Limit")
-                if limit != null:
-                    limit.timeout.connect(host._on_limit_timeout)
-                host.add_child(spawned)
+                if not host._begin_fresh(state):
+                    state["force_fail"] = true
+                    return true
                 return false
         state["phase"] = phase
         if phase == 3 and state["timeout_lose"] and not state["restart"] and reset_seen.call():
