@@ -19,8 +19,8 @@ Runs from this repository alone, given a checkout of the upstream source:
     python3 tools/extract_effects.py --upstream /tmp/godot-ai          # writes bridge/effects.json
     python3 tools/extract_effects.py --upstream /tmp/godot-ai --check  # exit 1 if it would change
 
---upstream may also come from the GODOT_AI_SRC environment variable. The checkout's
-pyproject.toml must say version 4.3.0 (the version the bridge pins).
+Pass the checkout with --upstream. The checkout's pyproject.toml must say version 4.3.0
+(the version the bridge pins).
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -630,13 +629,13 @@ def _row(commands: set[str], unresolved: bool, evidence: str, local: set[str] | 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--upstream", default=os.environ.get("GODOT_AI_SRC", ""),
-                        help=f"a checkout of hi-godot/godot-ai at v{PINNED} (or set GODOT_AI_SRC)")
+    parser.add_argument("--upstream", default="",
+                        help=f"a checkout of hi-godot/godot-ai at v{PINNED}")
     parser.add_argument("--out", default=str(OUT), help="where to write effects.json")
     parser.add_argument("--check", action="store_true", help="do not write; exit 1 when the output would change")
     args = parser.parse_args(argv)
     if not args.upstream:
-        print("no upstream source: pass --upstream DIR (or GODOT_AI_SRC). Get it with\n"
+        print("no upstream source: pass --upstream DIR. Get it with\n"
               f"  git clone --depth 1 --branch v{PINNED} https://github.com/hi-godot/godot-ai DIR", file=sys.stderr)
         return 2
     problem = configure(Path(args.upstream).expanduser())

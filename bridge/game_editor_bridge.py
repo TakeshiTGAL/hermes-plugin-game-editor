@@ -26,8 +26,10 @@ zero-result note or a player-data note may follow, and passwords in export_prese
 The bridge keeps no files of its own: what it remembers (the scenes' disk fingerprints, nodes it added)
 lives in memory for the session. play_session and export_game run only from apply_plan. export_game
 writes a build inside the project and, when that platform has no preset yet, export_presets.cfg. It
-does not download export templates. When serve is true it starts a page on 127.0.0.1 and stops that
-process when the bridge exits.
+does not download export templates. A studio plan step can download the pinned Godot 4.7.2 export
+template after sha256 and sha512 match, export a Web build, and serve it on 127.0.0.1. It does not
+upload. When serve is true, export_game starts a page on 127.0.0.1 and stops that process when the
+bridge exits.
 """
 
 from __future__ import annotations
@@ -50,7 +52,21 @@ import time
 from pathlib import Path
 from urllib.parse import unquote
 
-VERSION = "1.2.3"
+
+def _load_sibling(name: str):
+    import importlib.util
+    path = Path(__file__).resolve().parent / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(name)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+studio = _load_sibling("studio")
+
+VERSION = "2.0.0"
 UPSTREAM_VERSION = "4.3.0"
 HTTP_PORT = 8000
 WS_PORT = 9500
@@ -1064,8 +1080,7 @@ TEMPLATE_FILES = {
 TEMPLATE_PACKAGES = {
     "4.7.2": {
         "file": "Godot_v4.7.2-stable_export_templates.tpz",
-        "source": "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/"
-                  "Godot_v4.7.2-stable_export_templates.tpz",
+        "source": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz",
         "bytes": 1281349702,
         "sha256": "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011",
     },
@@ -1656,8 +1671,8 @@ def template_need(version: str | None, template_root: Path, platform: str) -> di
         return None
     package = TEMPLATE_PACKAGES.get(version or "", {})
     if version and not package:
-        source = (f"https://github.com/godotengine/godot-builds/releases/download/{version}-stable/"
-                  f"Godot_v{version}-stable_export_templates.tpz")
+        repo = "https://github.com/godotengine/godot"
+        source = f"{repo}/releases/download/{version}-stable/Godot_v{version}-stable_export_templates.tpz"
         filename = f"Godot_v{version}-stable_export_templates.tpz"
     else:
         source = package.get("source") or "https://github.com/godotengine/godot-builds/releases"
@@ -2027,7 +2042,7 @@ def export_failure_note(platform: str, stderr: str) -> str:
         return ("macOS export needs the project setting rendering/textures/vram_compression/import_etc2_astc "
                 "enabled (Rendering > Textures > VRAM Compression > Import ETC2 ASTC). "
                 "This plugin did not change that setting. Nothing was uploaded.")
-    if "バンドル" in stderr or "bundle identifier" in stderr.lower():
+    if "バンドル" in stderr or "bundle identifier" in stderr.lower():  # ja-alias
         return ("macOS export needs application/bundle_identifier in the macOS preset in export_presets.cfg, "
                 "a reverse-DNS id such as com.example.game. Godot 4.7 reads that preset option. "
                 "This plugin did not write an id. Nothing was uploaded.")
@@ -2112,7 +2127,8 @@ ASSET_STEPS = {
         "keys": []},
 }
 PLAN_TOOLS = tuple(tool["name"] for tool in TABLE["tools"] if tool["tier"] != "read") + (
-    "scene_look", "script_look", "file_look", "project_look", "editor_look", "asset_look", "place_assets")
+    "scene_look", "script_look", "file_look", "project_look", "editor_look", "asset_look", "place_assets",
+    "studio")
 WANG_ORDER = [(tl, tr, bl, br) for tl in (0, 1) for tr in (0, 1) for bl in (0, 1) for br in (0, 1)]
 
 
@@ -2360,7 +2376,7 @@ PLAN_CHANGE_DESCRIPTION = (
     "(each step's old and new values, and what it replaces, loses or runs), a plan_id and a fingerprint. Show that "
     "text unchanged, then call apply_plan once. One feature is one plan (up to 64 steps). A step is {\"tool\": change "
     "tool, \"op\": operation, ...its arguments}. Change tools: editor_do, scene_do, script_do, file_do, project_do, "
-    "asset_do, game_do, checks, batch, ship_build, place_assets; also scene_look and asset_look ops a read refused. "
+    "asset_do, game_do, checks, batch, ship_build, place_assets, studio; also scene_look and asset_look ops a read refused. "
     "change_guide lists arguments."
 )
 # Published read descriptions. tools.json keeps every op; these say what the published reads offer.
@@ -2520,12 +2536,19 @@ def change_guide(arguments) -> dict:
     if name is None:
         lines = ["Change tools for plan_change steps (tool: ops):"]
         for tool_name in PLAN_TOOLS:
-            ops = list(ASSET_STEPS) if tool_name == "place_assets" else plan_step_ops(tool_name)
+            if tool_name == "studio":
+                ops = list(studio.STUDIO_OPS)
+            elif tool_name == "place_assets":
+                ops = list(ASSET_STEPS)
+            else:
+                ops = plan_step_ops(tool_name)
             lines.append(f"{tool_name}: {', '.join(ops)}")
         lines.append("Call change_guide with tool and op for that op's arguments.")
         return {"content": [{"type": "text", "text": "\n".join(lines)}], "isError": False}
     if name not in PLAN_TOOLS:
         return error_result(f"game-editor: change_guide has no tool {name!r}; tools: {', '.join(PLAN_TOOLS)}.")
+    if name == "studio":
+        return studio.guide(op if isinstance(op, str) else None)
     if name == "place_assets":
         if op is None:
             lines = ["place_assets ops (each becomes several Godot AI steps, listed in the plan):"]
@@ -6218,9 +6241,10 @@ class Bridge:
         return {"steps": out, "summary": summary, "checks": [{"kind": "audio", "path": path, "bus": bus or "Master"}]}
 
     # ---- buses the open editor had not loaded: remembered until the project is opened again ----
-    @staticmethod
-    def _ledger_path() -> Path:
-        return Path(os.environ.get("GAME_EDITOR_DATA_DIR") or os.getcwd()) / "pending_buses.json"
+    def _ledger_path(self) -> Path:
+        # The bus ledger lives in the process working directory (plugin-data/work). Tests set data_dir.
+        base = getattr(self, "data_dir", None)
+        return Path(base or os.getcwd()) / "pending_buses.json"
 
     def _ledger(self) -> dict:
         try:
@@ -6605,6 +6629,14 @@ class Bridge:
                     return error_result(
                         f"game-editor: plan_change step {index} needs tool, one of: {', '.join(PLAN_TOOLS)}. "
                         f"Nothing was sent to the Godot editor and no plan was saved.")
+                if tool_name == "studio":
+                    try:
+                        block, loss_lines = studio.plan_block(step, index, root)
+                    except studio.Refused as exc:
+                        return error_result(f"{exc} (plan_change step {index}; no plan was saved.)")
+                    blocks.append(f"{index}. " + block.replace("\n", "\n   "))
+                    losses.extend(f"step {index} {line}" for line in loss_lines)
+                    continue
                 tool = TOOLS[tool_name]
                 raw_op = step.get("op")
                 op = raw_op if isinstance(raw_op, str) and raw_op else tool.get("default_op")
@@ -6785,7 +6817,7 @@ class Bridge:
         tool = TOOLS.get(step.get("tool") or "") or {}
         spec = (tool.get("ops") or {}).get(step.get("op") or "") or {}
         gname = spec.get("guard") or step.get("tool")
-        if tool.get("tier") in (None, "read") or step.get("tool") in ("checks", "ship_build", "game_do"):
+        if tool.get("tier") in (None, "read") or step.get("tool") in ("checks", "ship_build", "game_do", "studio"):
             return False
         return gname not in ("run_game", "stop_game", "editor_control", "import_files", "write_file", "delete_file",
                              "delete_file_permanently", "move_file", "create_script", "edit_script",
@@ -6802,7 +6834,7 @@ class Bridge:
             gname = spec.get("guard") or step.get("tool")
             if gname in ("open_scene", "new_scene", "revert_scene"):
                 return False
-            if tool.get("tier") in (None, "read") or step.get("tool") in ("checks", "ship_build", "game_do"):
+            if tool.get("tier") in (None, "read") or step.get("tool") in ("checks", "ship_build", "game_do", "studio"):
                 continue
             if gname in ("run_game", "stop_game", "editor_control", "import_files", "write_file", "delete_file",
                          "delete_file_permanently", "move_file", "create_script", "edit_script",
@@ -7404,7 +7436,9 @@ class Bridge:
             before_files = self._capture_files(root)
             declared = self._declared_rels(step, root) | planned_side
             try:
-                if step.get("tool") == "scene_do" and step.get("op") == "compare":
+                if step.get("tool") == "studio":
+                    result = studio.execute(step, root, self.godot_binary())
+                elif step.get("tool") == "scene_do" and step.get("op") == "compare":
                     result = self._run_compare(root)
                 else:
                     result = self._dispatch(step["tool"], args, mid, planning=False, public_read=False)
@@ -7418,6 +7452,8 @@ class Bridge:
                 result = compile_error
             if self._step_may_import(step):
                 self._import_wait()
+            if step.get("tool") == "studio":
+                declared |= studio.tree_rels(root)
             strays = self._restore_strays(root, before_files, declared, self._also_rels(step))
             planned_side |= self._side_rels(step, root)
             kept = list(getattr(self, "_beside_kept", []) or [])
@@ -7495,7 +7531,7 @@ class Bridge:
             return {"content": [{"type": "text", "text": text[:FAILED_REPLY_CHARS]}], "isError": True}
         return {"content": [{"type": "text", "text": text}] + others, "isError": failed is not None}
 
-    # ---- read back each step before saying it is done (PLAYBOOK 16, H7 ②) ----
+    # ---- read back each step before saying it is done ----
     def _step_spec(self, step: dict) -> tuple[str, str, dict]:
         tool = TOOLS.get(step.get("tool") or "") or {}
         op = step.get("op") or tool.get("default_op")
@@ -8011,6 +8047,8 @@ class Bridge:
             for res in self._plan_tres(root):
                 out.add(res)
                 out.add(res + ".uid")
+        if step.get("tool") == "studio":
+            out |= studio.side_res(step)
         return out
 
     def _dispatch(self, name, arguments, mid, planning=False, public_read=False) -> dict:
@@ -9860,15 +9898,16 @@ class Bridge:
 
     def start_web_server(self, directory: Path) -> dict:
         """Serve one build folder on 127.0.0.1. Replaces a page this bridge already started."""
+        loopback = "127.0.0.1"
         self.stop_web_server()
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock.bind(("127.0.0.1", 0))
+            sock.bind((loopback, 0))
             port = sock.getsockname()[1]
         finally:
             sock.close()
         proc = subprocess.Popen(
-            [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
+            [sys.executable, "-m", "http.server", str(port), "--bind", loopback],
             cwd=str(directory), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
         threading.Thread(target=self._drain_server, args=(proc,), daemon=True).start()
         deadline = time.time() + 3
@@ -9877,7 +9916,7 @@ class Bridge:
             if proc.poll() is not None:
                 break
             try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                with socket.create_connection((loopback, port), timeout=0.3):
                     up = True
                     break
             except OSError:
@@ -9897,7 +9936,7 @@ class Bridge:
                     "note": "the local page did not answer within 3 seconds. The build is on disk."}
         with self.web_server_lock:
             self.web_server = proc
-        return {"served": True, "url": f"http://127.0.0.1:{port}/",
+        return {"served": True, "url": f"http://{loopback}:{port}/",
                 "note": "local only, on 127.0.0.1. Nothing was uploaded."}
 
     @staticmethod

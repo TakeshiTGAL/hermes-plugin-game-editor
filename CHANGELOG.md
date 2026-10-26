@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0
+
+- A `studio` plan step, not a new MCP tool, builds a 60-second win-or-lose loop from one sentence. `test` writes a GDScript check and runs it with `godot --headless`. The reply is `STUDIO` or `STUDIO_FAIL` plus the exit code. `loop` writes the scene and does not run it. Run them as separate plans: `apply_plan` stops at the first error.
+- `studio` op `web` downloads the pinned Godot 4.7.2 export template only after sha256 and sha512 match, writes `build/web/index.html` and `build/web.zip`, and serves the page on 127.0.0.1. It does not upload.
+- `studio` op `import_asset` copies a GLB or an audio file, sets scale and a bottom-center pivot, adds a box or convex collision for a mesh, and appends one CREDITS line. Source and license come from a sibling origin file, or `unknown`.
+- `studio` op `record` runs Movie Maker only when a display exists. With no display it says the movie was not recorded. Headless `--write-movie` on Godot 4.7.2 exits with signal 11 (SIGSEGV in texture_2d_get, parameter t is null). A still is not saved in its place.
+- `ship_build` still does not download export templates.
+
 ## 1.2.3
 
 - A `.uid` or `.import` file the editor writes beside a file that is already on disk stays, when the new bytes are that file's shape: one `uid://` line, or an import file with a `[remap]` section. The reply names each kept path on one line. It does not matter which plan, or which person, created the file beside it. Any other file the step did not name, including a `.uid` whose bytes are not that shape or whose file is not on disk, is still put back, and that step is an error.

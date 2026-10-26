@@ -62,7 +62,7 @@ class ManifestTest(unittest.TestCase):
     def test_plugin_trust_and_app(self):
         plugin = _load("plugin.json")
         self.assertEqual(plugin["name"], "game-editor")
-        self.assertEqual(plugin["version"], "1.2.3")
+        self.assertEqual(plugin["version"], "2.0.0")
         # Hermes v0.22.2 validate warns "ignored unknown top-level field: requires_hermes"; the catalog entry keeps it.
         self.assertNotIn("requires_hermes", plugin)
         self.assertEqual(plugin["license"], "MIT")
@@ -82,13 +82,14 @@ class ManifestTest(unittest.TestCase):
     def test_bridge_uses_only_the_standard_library(self):
         import ast
         import sys
-        tree = ast.parse((ROOT / "bridge" / "game_editor_bridge.py").read_text(encoding="utf-8"))
         names = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names.update(a.name.split(".")[0] for a in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                names.add(node.module.split(".")[0])
+        for rel in ("bridge/game_editor_bridge.py", "bridge/studio.py", "bridge/safe_write.py"):
+            tree = ast.parse((ROOT / rel).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names.update(a.name.split(".")[0] for a in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                    names.add(node.module.split(".")[0])
         if not hasattr(sys, "stdlib_module_names"):
             self.skipTest("Python 3.10+ is needed for sys.stdlib_module_names")
         stdlib = set(sys.stdlib_module_names) | {"__future__"}

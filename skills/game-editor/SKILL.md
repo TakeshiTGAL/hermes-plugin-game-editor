@@ -1,7 +1,7 @@
 ---
 name: game-editor
-description: "Work on the Godot 4 project open in the editor. Build, playtest, fix and export, one plan and one approval at a time, and put GameForge assets into the open scene."
-version: 1.2.3
+description: "Godot, one sentence becomes a tested 60-second loop and a loopback Web build. Edit, play and export the open project, one plan at a time."
+version: 2.0.0
 author: TakeshiTGAL
 license: MIT
 platforms: [macos]
@@ -25,7 +25,7 @@ Tools:
 - Change: `mcp__game_editor__plan_change` (writes nothing), `mcp__game_editor__apply_plan` (Hermes asks first) and `mcp__game_editor__confirm_risky_plan` (the second approval, only for a plan that deletes, overwrites, discards unsaved work, writes outside the project or runs code written in it).
 - GameForge's playtest report: `file_look` op `gameforge_report` (no approval).
 
-A plan step's `tool` is `editor_do`, `scene_do`, `script_do`, `file_do`, `project_do`, `asset_do`, `game_do`, `checks`, `batch`, `ship_build` or `place_assets` (also `scene_look` or `asset_look` when a read was refused because of a @tool script). These are step names, not tools; Hermes does not list them.
+A plan step's `tool` is `editor_do`, `scene_do`, `script_do`, `file_do`, `project_do`, `asset_do`, `game_do`, `checks`, `batch`, `ship_build`, `place_assets` or `studio` (also `scene_look` or `asset_look` when a read was refused because of a @tool script). These are step names, not tools; Hermes does not list them.
 
 ## Procedure
 
@@ -50,8 +50,16 @@ The daily loop: look → plan → apply → play → fix from the file and line 
 6. Save with `scene_do` op `save` in the same plan only after both sides are known. `plan_change` does not read editor state, the open scenes, the scene tree or node values. Apply `{"tool": "scene_do", "op": "compare"}` first (one approval; it reads the editor and can run `@tool` code), or put that compare before the save in the same plan. If the last compare differs, a plain save makes no plan and nobody is asked; the reply lists each difference, including a node or a script that is in the editor and not in the file. Ask the user. To keep the editor's version, plan again with `"overwrite": true` on the save step: the plan names every disk value it drops, and it needs the second approval. If compare has not run since the file changed, the save makes no plan.
 7. Play: one `game_do` op `play_session` step (it plays the files on disk: save first, or `autosave: true`). On a headless editor the plan says it writes `res://ge_headless_arm.gd` and `res://ge_headless_arm.tscn`, opens that scene so `--headless` is added to the run arguments in memory, closes the scene and removes the files. `project.godot` is not left changed. A windowed editor is not given `--headless`. `not_live` means the game did not stay up with frames advancing; `ok` true still needs the goal met. `goal` is `score >= 3` or a node path; `steps` are `{"op": "action", "action": "ui_right", "seconds": 2}`, `key` or `wait`, 12 seconds in all; `watch` lists runtime paths like `/root/Main/Player`. For a score goal the plan adds the nodes that hold score to `watch`. `ok` true means the game was playing, the frame counter advanced, positions were watched, and the goal was judged and met. A script error, a parse error, a line that says `ERROR:`, a line that names a script and a line (`level.gd:7 @`), a line that says `on a null instance`, or a line that says `node not found` is a failure. When that line names a file and a line, the finding carries `file`, `line` and `code` (the text of that line). Other logged lines are `log` and do not by themselves make `ok` false. idle and frame_drop can still be listed. A missed goal stays `ok` false even when frames advanced. Each finding carries `evidence`: the step it follows, the game's frame counter, the watched nodes' state, the log lines and, when the editor gives one, a picture attached to the reply. Quote `kind`, `repro` and that evidence. `replay` in the reply is the exact step to play the same script again.
 8. Fix: an `error` finding carries `file`, `line` and `code` (the line's text). Plan `script_do` op `script` with `path` that file and `old_text` that code, plus the same `play_session`, and apply once. For a GameForge playtest, `file_look` op `gameforge_report` reads its `report.json` (the newest under `res://playtests/` when `path` is left out) and returns `fix_plan.steps`: write `new_text` for each line, set the play step's goal and input, then `plan_change`.
-9. Export: one `ship_build` step, op `export_game`, `platform` `web`, `macos`, `android` or `ios`. It never downloads templates or uploads; `export_templates_missing` → quote file, source and size and stop.
+9. Export with the editor templates: one `ship_build` step, op `export_game`, `platform` `web`, `macos`, `android` or `ios`. `ship_build` does not download templates or upload; `export_templates_missing` → quote file, source and size and stop. For a loopback Web build of the 60-second loop, use `studio` op `web` instead (step 11).
 10. Tests: `checks` op `gut` or `gdunit4` (the plan refuses when the framework or the test folder is missing), or `godot_ai`. A pass needs `"passed": true`.
+11. One sentence to a tested 60-second loop. Use four separate plans. `apply_plan` stops at the first error, so do not put `test` and `loop` in the same plan.
+    - `{"tool": "studio", "op": "test", "goal": "Pick up the key and a sound plays and the door opens. If you do not get out in 60 seconds, start over."}` writes the check and runs `godot --headless`. The first run prints `STUDIO_FAIL` and a non-zero exit. Show that string.
+    - `{"tool": "studio", "op": "loop", "goal": "Pick up the key and a sound plays and the door opens. If you do not get out in 60 seconds, start over."}` writes the loop. It does not run it. The reply includes one CREDITS line for the generated beep.
+    - `studio` op `test` again with the same goal. A pass prints `STUDIO` with fell, sound, picked, door, timeout_lose and restart all true, and exit 0.
+    - `{"tool": "studio", "op": "web"}` exports Web to `res://build/web/index.html`, writes `res://build/web.zip`, and serves on 127.0.0.1 only. It does not upload. Open the URL in a browser on this computer. To publish, upload that folder or zip yourself.
+    - `studio` op `import_asset` with `path` copies a `.glb`, `.wav`, `.ogg` or `.mp3`, fixes scale, a bottom-center pivot and a box or convex collision for a mesh, and appends one CREDITS line. A `.blend` is refused: export a GLB; do not run Blender.
+    - `studio` op `record` writes a movie only when a display exists. Otherwise the reply says the movie was not recorded.
+    The plan text prints `rule_key: studio:` and 16 hex digits so you can see which plan you are approving. That line is not a Hermes allow-list entry. Hermes itself is not modified.
 
 ## Approval
 
@@ -99,7 +107,8 @@ Quote the first line of the reply. Do not describe values the tools did not retu
 - `Unknown Godot class` → use a class the reply suggests, or read `editor_look` op `class`.
 - `Cannot delete the scene root` → delete a child, not the root.
 - `NEW_CLIENT_SESSION_REQUIRED` → a different Godot AI backend is already running. Close that backend, then try once. Nothing was sent.
-- `export_templates_missing` → install that version's export templates in the editor. This plugin does not download them. Nothing was written.
+- `export_templates_missing` → `ship_build` did not download templates and wrote nothing. Install that version's export templates in the editor, or use `studio` op `web`, which downloads only the pinned Godot 4.7.2 template after sha256 and sha512 match.
+- `STUDIO_FAIL` → quote the string. Plan `studio` op `loop`, then plan `studio` op `test` again. Do not put both in one plan.
 - `refused to save` → the editor and the file already differed. Apply `scene_do` op `compare`, then plan the save. Nothing was written.
 - `overwrite keeps the editor` → the save kept the editor copy. Read the reply's list before another save.
 - `script diagnostics` → the editor log was empty and the reply shows the last diagnostics. Quote the file and line, then plan a fix.
@@ -125,6 +134,6 @@ Quote the first line of the reply. Do not describe values the tools did not retu
 
 ## Limits
 
-It works on the project open in the editor. It does not download export templates, upload builds, sign in to stores, read or write `user://` player data, or generate art or sound (GameForge or another tool makes the files; this places them). Say that in one sentence and stop.
+It works on the project open in the editor. `ship_build` does not download export templates. `studio` op `web` downloads only the pinned Godot 4.7.2 export template from GitHub after sha256 and sha512 match, serves the page on 127.0.0.1, and does not upload. Nothing here signs in to a store, reads or writes `user://` player data, or calls a paid asset API. The loop beep is generated in GDScript. Headless `--write-movie` on Godot 4.7.2 exits with signal 11 (SIGSEGV in texture_2d_get, parameter t is null). `studio` op `record` starts Movie Maker only when a display exists (a macOS GUI session, or xvfb on Linux). With no display the reply says the movie was not recorded and does not save a still. Say that in one sentence and stop.
 
 Never suggest pressing Configure for Hermes in the Godot AI dock, or `hermes mcp add` for godot-ai: that adds a second server, named `godot-ai`, whose tools run with no approval and none of these checks. Ask the user to remove it (Remove in the dock, or `hermes mcp remove godot-ai`).

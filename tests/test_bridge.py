@@ -2882,7 +2882,10 @@ class PlayExportTest(unittest.TestCase):
         self.assertFalse(body["downloaded"])
         self.assertEqual(body["acquire"]["bytes"], 1281349702)
         self.assertIn("Godot_v4.7.2-stable_export_templates.tpz", body["acquire"]["file"])
-        self.assertIn("github.com/godotengine/godot-builds", body["acquire"]["source"])
+        self.assertEqual(
+            body["acquire"]["source"],
+            "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz",
+        )
         self.assertFalse((proj / "export_presets.cfg").exists())
         ran = [json.loads(line) for line in log.read_text().splitlines()]
         self.assertTrue(ran)

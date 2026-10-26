@@ -545,8 +545,8 @@ class V10Test(unittest.TestCase):
     def test_a_bus_the_editor_had_not_loaded_waits_and_finishes_after_reopening(self):
         V._gameforge(self.p.root)
         data = tempfile.TemporaryDirectory()
-        os.environ["GAME_EDITOR_DATA_DIR"] = data.name
         fake = self.fake(props={"/Level/CoinSound": {"bus": "Master"}})
+        fake.bridge.data_dir = data.name
         try:
             original = fake.bridge.upstream
             kept = {"bus": "Master"}
@@ -578,7 +578,6 @@ class V10Test(unittest.TestCase):
             self.assertIn("/Level/CoinSound is on bus SFX now", done["content"][0]["text"])
             self.assertFalse((Path(data.name) / "pending_buses.json").exists())
         finally:
-            os.environ.pop("GAME_EDITOR_DATA_DIR", None)
             fake.close()
             data.cleanup()
 
@@ -880,8 +879,8 @@ class ObserveN2Test(unittest.TestCase):
 
     def test_a_failed_later_step_still_records_a_waiting_bus(self):
         data = tempfile.TemporaryDirectory()
-        os.environ["GAME_EDITOR_DATA_DIR"] = data.name
         fake = self.fake()
+        fake.bridge.data_dir = data.name
         try:
             original = fake.bridge.upstream
 
@@ -910,7 +909,6 @@ class ObserveN2Test(unittest.TestCase):
             again = json.loads((Path(data.name) / "pending_buses.json").read_text(encoding="utf-8"))
             self.assertEqual(len(again[str(self.p.root)]), 1)
         finally:
-            os.environ.pop("GAME_EDITOR_DATA_DIR", None)
             fake.close()
             data.cleanup()
 
