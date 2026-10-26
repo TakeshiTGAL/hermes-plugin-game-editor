@@ -1,0 +1,94 @@
+{
+  "excerpts": [
+    {
+      "plugin": "meshy",
+      "version": "0.5.0",
+      "sha": "e746f4c690d7b9855e8cf06485ed6ac906b66e12",
+      "source": "meshy/skills/meshy-3d/SKILL.md",
+      "lines": "202-223",
+      "file": "meshy_skill_excerpt.txt",
+      "sha256": "3f83f5abad3860c09425d1787c7570c9814a91188339bde3c7b998c77d486306"
+    },
+    {
+      "plugin": "hermes-tripo",
+      "version": "0.4.0",
+      "sha": "09b26f6b3b2662a0fe86dc782283bc4cddf7a196",
+      "source": "skills/workflow/SKILL.md",
+      "lines": "60-61",
+      "file": "tripo_video_excerpt.txt",
+      "sha256": "c66946398a5037c14f6feddfe58ff01b47bfdcf6c165d088ebe53e43d4e8a7bc"
+    },
+    {
+      "plugin": "hermes-tripo",
+      "version": "0.4.0",
+      "sha": "09b26f6b3b2662a0fe86dc782283bc4cddf7a196",
+      "source": "skills/workflow/SKILL.md",
+      "lines": "201-201",
+      "file": "tripo_godot_excerpt.txt",
+      "sha256": "0154bd8413227f47aed434776c5623b2ca93f3d8e042cb1b032cf3925c772ea3"
+    },
+    {
+      "plugin": "blender",
+      "version": "0.4.1",
+      "sha": "9b11ffeda84b077bea9de52d22733c7a41ca581a",
+      "source": "blender/skills/blender/SKILL.md",
+      "lines": "90-96",
+      "file": "blender_skill_excerpt.txt",
+      "sha256": "93dc003607314713d1246fdb18109c907797a59d0df45db8ba5107c5a58aaa1a"
+    },
+    {
+      "plugin": "blender",
+      "version": "0.4.1",
+      "sha": "9b11ffeda84b077bea9de52d22733c7a41ca581a",
+      "source": "blender/README.md",
+      "lines": "46-46",
+      "file": "blender_readme_excerpt.txt",
+      "sha256": "90eaa5cce4b4126b164ee423b0fa895ac2eb049936f624b21e97c626e8a7bda9"
+    },
+    {
+      "plugin": "elevenlabs-sound-effects",
+      "version": "1.2.0",
+      "sha": "e4e40398c4d46f86dba3bbdcbfa5ef02d2675988",
+      "source": "elevenlabs-sound-effects/skills/elevenlabs-sound-design/SKILL.md",
+      "lines": "93-125",
+      "file": "elevenlabs_skill_excerpt.txt",
+      "sha256": "e2b97b7c293b03a0c158bc643edda0ac9fccee8921704f4862d6ffafc4b2ff1f"
+    },
+    {
+      "plugin": "elevenlabs-sound-effects",
+      "version": "1.2.0",
+      "sha": "e4e40398c4d46f86dba3bbdcbfa5ef02d2675988",
+      "source": "elevenlabs-sound-effects/README.md",
+      "lines": "71-72",
+      "file": "elevenlabs_readme_excerpt.txt",
+      "sha256": "5470c2e76f6afe3e5d9f03eeb0d6d37da66706224531cf92799b6090a7a2e38f"
+    }
+  ],
+  "samples": [
+    {
+      "file": "meshy_sample.glb",
+      "sha256": "09c6f225a8c5c1f9f388c62f410696e6c54fc1eb829ef79fcb771b937c3b2f2f",
+      "bytes": 432
+    },
+    {
+      "file": "tripo_sample.glb",
+      "sha256": "09c6f225a8c5c1f9f388c62f410696e6c54fc1eb829ef79fcb771b937c3b2f2f",
+      "bytes": 432
+    },
+    {
+      "file": "blender_sample.blend",
+      "sha256": "7169962d39e8fad5eb153793615a3d97478ab34afc1efe45902487f596e19a3c",
+      "bytes": 8
+    },
+    {
+      "file": "blender_result.json",
+      "sha256": "13acc8d3b3f94c68eac873f0cff9e9602804d040ea14437a3cd012a7a2884c1b",
+      "bytes": 27
+    },
+    {
+      "file": "elevenlabs_sample.wav",
+      "sha256": "4cb2aa900a8e845ded4e3bb98864ad583cbff444ae17903ce9ddd9ae8a19e5be",
+      "bytes": 484
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Blender Lab warns that its tools execute arbitrary Python in Blender without protection against file deletion or data exfiltration. Use only with trusted workflows, keep the bridge loopback-only, and prefer a disposable scene or isolated machine for experiments. This is not a sandbox.

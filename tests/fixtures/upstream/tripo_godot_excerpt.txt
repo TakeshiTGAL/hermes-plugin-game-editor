@@ -1,0 +1,1 @@
+| Godot 4 | keep GLB | Drop the `.glb` into the project; clips become an AnimationPlayer. |

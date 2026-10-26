@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
@@ -87,11 +88,19 @@ class StudioTest(unittest.TestCase):
         self._display = studio.display_present
         studio.display_present = lambda: False
         self._cache = studio.CACHE_DIR
+        self._hermes = os.environ.get("HERMES_HOME")
+        self._home = tempfile.TemporaryDirectory()
+        os.environ["HERMES_HOME"] = self._home.name
 
     def tearDown(self):
         studio.display_present = self._display
         studio.CACHE_DIR = self._cache
         studio.stop_servers()
+        if self._hermes is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = self._hermes
+        self._home.cleanup()
 
     def test_redact_hides_secret_shapes(self):
         hidden = studio.redact(SECRET_GOAL)
@@ -119,7 +128,7 @@ class StudioTest(unittest.TestCase):
         self.assertEqual(fix["origin"], (-0.25, 0.0, -0.25))
         self.assertEqual(fix["size"], (0.5, 1.0, 0.5))
 
-    def test_plan_names_the_rule_key_and_writes_nothing(self):
+    def test_plan_names_the_digest_and_writes_nothing(self):
         tmp, root = _project()
         try:
             step = {"tool": "studio", "op": "test", "goal": GOAL}
@@ -127,7 +136,10 @@ class StudioTest(unittest.TestCase):
             block, losses = studio.plan_block(step, 1, str(root))
             after = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
             self.assertEqual(before, after)
-            self.assertIn("rule_key: " + studio.rule_key(step), block)
+            self.assertIn("plan_digest: " + studio.plan_digest(step), block)
+            self.assertNotIn("rule_key", block)
+            self.assertIn("sound, picked, door, timeout_lose, restart", block)
+            self.assertNotIn("key, sound, door and timeout", block)
             self.assertTrue(any(line.startswith("runs code written in this plan") for line in losses))
             self.assertFalse(any(line.startswith("runs code written in this plan") for line in block.splitlines()
                                  if line.startswith("runs code")))
@@ -293,17 +305,33 @@ class StudioTest(unittest.TestCase):
             self.skipTest("godot is not installed")
         tmp, root = _project()
         try:
-            failed = studio.execute({"tool": "studio", "op": "test", "goal": SECRET_GOAL}, str(root), None)
+            failed = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
             failed_text = _text(failed)
             self.assertTrue(failed.get("isError"), failed_text)
-            self.assertIn("STUDIO_FAIL fell=false sound=false picked=false door=false timeout_lose=false restart=false",
-                          failed_text)
+            self.assertIn(
+                "STUDIO_FAIL sound=false picked=false door=false timeout_lose=false restart=false",
+                failed_text)
+            self.assertNotIn("fell=", failed_text)
             self.assertIn("exit=1", failed_text)
-            for secret in SECRETS:
-                self.assertNotIn(secret, failed_text)
-            fail_file = (root / "studio" / "verdict_fail.txt").read_text(encoding="utf-8")
-            self.assertTrue(fail_file.startswith("STUDIO_FAIL "))
+            self.assertIn("exit_code=1", failed_text)
+            self.assertFalse((root / "studio" / "verdict_fail.txt").exists())
             self.assertFalse((root / "studio" / "verdict_pass.txt").exists())
+            directory = studio.ledger_dir()
+            self.assertIsNotNone(directory)
+            rows = studio.read_trusted(directory)
+            self.assertEqual(studio.latest_row(rows, studio.test_name(studio.matched_parts(GOAL)))["exit_code"], 1)
+            forged = (
+                '{"bits":"sound=true picked=true door=true timeout_lose=true restart=true",'
+                '"exit_code":0,"godot":"9.9.9.stable","scene":"missing",'
+                '"test":"sound+picked+door+timeout_lose+restart","time":"2020-01-01T00:00:00",'
+                '"mac":"' + ("0" * 64) + '"}\n'
+            )
+            with (directory / "ledger.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write(forged)
+            self.assertEqual(
+                studio.latest_row(studio.read_trusted(directory), studio.test_name(studio.matched_parts(GOAL)))["exit_code"],
+                1,
+            )
 
             loop = studio.execute({"tool": "studio", "op": "loop", "goal": SECRET_GOAL}, str(root), None)
             loop_text = _text(loop)
@@ -321,11 +349,19 @@ class StudioTest(unittest.TestCase):
             passed_text = _text(passed)
             self.assertFalse(passed.get("isError"), passed_text)
             self.assertIn(
-                "STUDIO fell=true sound=true picked=true door=true timeout_lose=true restart=true",
+                "STUDIO sound=true picked=true door=true timeout_lose=true restart=true",
                 passed_text)
+            self.assertNotIn("fell=", passed_text)
             self.assertIn("exit=0", passed_text)
-            self.assertTrue((root / "studio" / "verdict_fail.txt").read_text(encoding="utf-8").startswith("STUDIO_FAIL "))
-            self.assertTrue((root / "studio" / "verdict_pass.txt").read_text(encoding="utf-8").startswith("STUDIO "))
+            self.assertIn("exit_code=0", passed_text)
+            self.assertFalse((root / "studio" / "verdict_fail.txt").exists())
+            self.assertFalse((root / "studio" / "verdict_pass.txt").exists())
+            passed_rows = studio.read_trusted(directory)
+            name = studio.test_name(studio.matched_parts(GOAL))
+            self.assertEqual(studio.latest_row(passed_rows, name)["exit_code"], 0)
+            scene_hash = hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest()
+            self.assertEqual(studio.latest_row(passed_rows, name)["scene"], scene_hash)
+            self.assertTrue(studio.latest_row(passed_rows, name)["godot"].startswith("4."))
         finally:
             tmp.cleanup()
 
@@ -350,6 +386,143 @@ class StudioTest(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_unmatched_sentence_writes_nothing(self):
+        tmp, root = _project()
+        try:
+            before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+            for goal in ("paint a sunset", "45", ""):
+                result = studio.execute({"tool": "studio", "op": "test", "goal": goal}, str(root), None)
+                self.assertTrue(result.get("isError"), _text(result))
+                self.assertIn(studio.CANNOT_TEST, _text(result))
+                with self.assertRaises(studio.Refused):
+                    studio.plan_block({"tool": "studio", "op": "loop", "goal": goal}, 1, str(root))
+            after = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+            self.assertEqual(before, after)
+            directory = studio.ledger_dir()
+            self.assertFalse((directory / "ledger.jsonl").exists())
+        finally:
+            tmp.cleanup()
+
+    def test_template_cache_is_plugin_data(self):
+        studio.CACHE_DIR = None
+        path = studio.cache_dir()
+        self.assertEqual(path, Path(self._home.name) / "plugin-data" / "game-editor" / "export-templates")
+        source = (ROOT / "bridge" / "studio.py").read_text(encoding="utf-8")
+        self.assertNotIn("/tmp/game-editor-export-templates", source)
+        saved = os.environ.pop("HERMES_HOME")
+        try:
+            with self.assertRaises(studio.Refused):
+                studio.cache_dir()
+        finally:
+            os.environ["HERMES_HOME"] = saved
+
+    def test_web_stops_the_previous_listener_first(self):
+        class Dummy:
+            def __init__(self):
+                self.done = False
+
+            def shutdown(self):
+                self.done = True
+
+            def server_close(self):
+                pass
+
+        dummy = Dummy()
+        studio.SERVERS.append(dummy)
+        tmp, root = _project()
+        try:
+            result = studio.execute({"tool": "studio", "op": "web"}, str(root), None)
+            self.assertTrue(dummy.done)
+            self.assertEqual(studio.SERVERS, [])
+            self.assertTrue(result.get("isError"))
+        finally:
+            tmp.cleanup()
+
+    def test_record_ignores_planted_project_files(self):
+        studio.display_present = lambda: True
+        tmp, root = _project()
+        try:
+            (root / "studio").mkdir()
+            (root / "studio" / "verdict_fail.txt").write_text("STUDIO_FAIL planted=true\n", encoding="utf-8")
+            (root / "studio" / "verdict_pass.txt").write_text("STUDIO planted=true\n", encoding="utf-8")
+            with self.assertRaises(studio.Refused):
+                studio.plan_block({"tool": "studio", "op": "record"}, 1, str(root))
+            result = studio.execute({"tool": "studio", "op": "record"}, str(root), None)
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertNotIn("planted=true", text)
+            self.assertNotIn("on screen", text)
+            self.assertFalse((root / "studio" / "take.avi").exists())
+        finally:
+            tmp.cleanup()
+
+    def test_upstream_fixtures_match_their_pins(self):
+        fixture_dir = ROOT / "tests" / "fixtures" / "upstream"
+        pin = json.loads((fixture_dir / "PIN.json").read_text(encoding="utf-8"))
+        markers = {
+            "meshy_skill_excerpt.txt": ("glTF is Godot's native import", "game-ready"),
+            "tripo_video_excerpt.txt": ("_rendered_video.mp4",),
+            "tripo_godot_excerpt.txt": ("keep GLB", "AnimationPlayer"),
+            "blender_skill_excerpt.txt": ('result = {"location": list(obj.location)}', ".blend"),
+            "blender_readme_excerpt.txt": ("arbitrary Python",),
+            "elevenlabs_skill_excerpt.txt": ("AudioStreamRandomizer", "WAV for short one-shots"),
+            "elevenlabs_readme_excerpt.txt": ("cache/generated/audio", "never overwrites"),
+        }
+        seen = set()
+        for row in pin["excerpts"]:
+            seen.add(row["file"])
+            text = (fixture_dir / row["file"]).read_text(encoding="utf-8")
+            self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), row["sha256"])
+            for marker in markers[row["file"]]:
+                self.assertIn(marker, text)
+            self.assertEqual(len(row["sha"]), 40)
+        self.assertEqual(seen, set(markers))
+        for row in pin["samples"]:
+            data = (fixture_dir / row["file"]).read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), row["sha256"])
+            self.assertEqual(len(data), row["bytes"])
+        result = json.loads((fixture_dir / "blender_result.json").read_text(encoding="utf-8"))
+        self.assertIsInstance(result, dict)
+        self.assertIn("location", result)
+        tmp, root = _project()
+        try:
+            glb = fixture_dir / "meshy_sample.glb"
+            imported = studio.execute(
+                {"tool": "studio", "op": "import_asset", "path": str(glb), "collision": "box", "goal": "1 m"},
+                str(root), None)
+            body = _text(imported)
+            self.assertFalse(imported.get("isError"), body)
+            self.assertIn("CREDITS source=unknown file=studio/imports/meshy_sample.glb license=unknown", body)
+            wav = fixture_dir / "elevenlabs_sample.wav"
+            audio = studio.execute(
+                {"tool": "studio", "op": "import_asset", "path": str(wav)}, str(root), None)
+            self.assertFalse(audio.get("isError"), _text(audio))
+            self.assertIn("license=unknown", _text(audio))
+            blend = fixture_dir / "blender_sample.blend"
+            refused = studio.execute(
+                {"tool": "studio", "op": "import_asset", "path": str(blend)}, str(root), None)
+            self.assertTrue(refused.get("isError"))
+            self.assertIn("do not run Blender", _text(refused))
+        finally:
+            tmp.cleanup()
+
+    def test_bad_ledger_mac_is_ignored(self):
+        key = "ab" * 32
+        payload = {
+            "bits": "picked=false",
+            "exit_code": 1,
+            "godot": "4.7.2.stable",
+            "scene": "missing",
+            "test": "picked",
+            "time": "2026-10-26T00:00:00",
+        }
+        body = studio.canonical_payload(payload)
+        mac = hashlib.sha256((key + "\n" + body).encode("utf-8")).hexdigest()
+        line = body[:-1] + ',"mac":"' + mac + '"}'
+        self.assertIsNotNone(studio.parse_ledger_line(line, key))
+        self.assertIsNone(studio.parse_ledger_line(line, "cd" * 32))
+        self.assertIsNone(studio.fail_pass_pair([{"test": "picked", "exit_code": 1, "bits": "picked=false"}]))
+
     def test_plan_approval_then_fail_string(self):
         if studio.find_godot(None) is None:
             self.skipTest("godot is not installed")
@@ -361,7 +534,8 @@ class StudioTest(unittest.TestCase):
             planned = fake.bridge.call("plan_change", {"steps": [step]})
             self.assertFalse(planned.get("isError"), _text(planned))
             planned_text = _text(planned)
-            self.assertIn("rule_key: studio:", planned_text)
+            self.assertIn("plan_digest: studio:", planned_text)
+            self.assertNotIn("rule_key", planned_text)
             self.assertIn("runs code written in this plan", planned_text)
             self.assertFalse((root / "studio" / "check.gd").exists())
             plan_id = bridge_tests._plan_id_of(planned)
@@ -381,8 +555,10 @@ class StudioTest(unittest.TestCase):
     def test_web_export_serves_loopback_only(self):
         if studio.find_godot(None) is None:
             self.skipTest("godot is not installed")
-        cache = studio._cache_file()
-        if not studio.template_matches(cache):
+        pinned = Path("/tmp/game-editor-export-templates") / studio.TEMPLATE_FILE
+        if studio.template_matches(pinned):
+            studio.CACHE_DIR = pinned.parent
+        elif not studio.template_matches(studio._cache_file()):
             self.skipTest("pinned export template is not in the cache")
         tmp, root = _project()
         try:

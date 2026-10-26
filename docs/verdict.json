@@ -1,0 +1,12 @@
+{
+  "parts": ["fell", "sound", "picked", "door", "timeout_lose", "restart"],
+  "cannot_test": "This sentence cannot be a test.",
+  "pass_prefix": "STUDIO ",
+  "fail_prefix": "STUDIO_FAIL ",
+  "exit_pass": 0,
+  "bit_true": "true",
+  "bit_false": "false",
+  "engines": ["godot", "unity"],
+  "unity_runner": "not in this version",
+  "unity_plugin": "csharp-game-editor"
+}

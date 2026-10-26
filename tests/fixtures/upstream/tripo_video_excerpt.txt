@@ -1,0 +1,2 @@
+- **Turntable videos:** when a finished task lists `rendered_video_url` in `output_files`,
+  `tripo_download` saves it as `<name>_rendered_video.mp4`; on chat platforms its `attach` line

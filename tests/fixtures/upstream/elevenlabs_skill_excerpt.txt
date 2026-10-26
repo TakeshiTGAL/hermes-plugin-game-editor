@@ -1,0 +1,33 @@
+| Destination | Deliver | Why |
+|---|---|---|
+| Godot, Unity, Unreal, web games | OGG (Vorbis) for music/ambience loops, WAV for short one-shots; mono for positional sounds (`process --mono`), stereo for ambience, music and UI | engines import both; OGG keeps loops small, WAV avoids decode cost and MP3 padding on one-shots. A sound placed in the world (footstep, hit, door, creature) is a point source the engine attenuates and pans, so it ships mono by convention (Unity has a Force To Mono import option for it); a stereo bed stays stereo |
+| Video editing (Premiere, Resolve, Final Cut) | WAV 48 kHz | the video standard; no generation loss |
+| App/UI sounds | WAV (or OGG on Android/web) | short, sample-accurate start |
+| Chat (Telegram, Discord, Slack, WhatsApp) | MP3 | plays inline on most chat apps; Ogg Opus and WAV may arrive as plain file attachments (Telegram does this). Discord: Hermes after v0.22.5 sends MP3/WAV as normal attachments that play inline; v0.22.5 and earlier sent them as voice messages |
+
+MP3 adds a short silence at the start (encoder padding), so never use MP3 for gapless loops in an
+engine; convert loops to OGG or WAV.
+
+## Game sound sets (variations)
+
+Sounds a game repeats (footsteps, impacts, sword swings, pickups) need several takes that the engine
+picks between at random, or the repetition is obvious. ElevenLabs has no seed or batch option: each
+take is its own call.
+
+1. Brief: the sound, its surface or material, and how many takes (4-8 for footsteps and impacts,
+   3-4 for rarer sounds). Quote the cost: takes x the per-sound bill.
+2. Generate each take with the SAME prompt, the same `duration_seconds`, and `prompt_influence`
+   around 0.2-0.3 so the takes differ. Add the destination to the prompt ("single hit, no tail,
+   dry"): the engine adds the room.
+3. Level every take to one target, and downmix positional sounds:
+   `process TAKE --out TAKE_lvl.wav --trim --loudness -18 --mono` (drop `--mono` for UI and
+   ambience; -14 to -18 LUFS suits games). Takes at different loudness stand out when the engine
+   picks at random.
+4. `pack TAKE_lvl... --name "Footstep Gravel" --out-dir DIR --variations`: names the files
+   `footstep_gravel_01.wav`, `_02`... (one base name, numbered, which is how engine random containers
+   expect takes), measures each take, and reports `loudness_spread_lu`. Over 1 LU the result carries a
+   `loudness_note`: re-level the outliers and pack again. Report the spread.
+5. In the engine (say so when you deliver; you can't do it from here unless an engine tool is
+   connected): import the files, then put the takes in its random picker: a Sound Cue Random node or a
+   MetaSound in Unreal, an Audio Random Container in Unity 6, an `AudioStreamRandomizer` in Godot 4.
+   Loops need the engine's loop flag set on import (Unreal: the Sound Wave's Looping option).
