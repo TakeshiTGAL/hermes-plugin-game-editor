@@ -177,6 +177,61 @@ def _project() -> tuple[tempfile.TemporaryDirectory, Path]:
     return tmp, root
 
 
+def _frame_shows_both_lines(width: int, height: int, rgb: bytes) -> bool:
+    """True when a frame has the fail line, the pass line, and the loop, and is not one flat color."""
+    if width < 8 or height < 8 or len(rgb) != width * height * 3:
+        return False
+    red = green = game = 0
+    flat = True
+    first = rgb[:3]
+    for offset in range(0, len(rgb), 3):
+        r, g, b = rgb[offset], rgb[offset + 1], rgb[offset + 2]
+        if (r, g, b) != (first[0], first[1], first[2]):
+            flat = False
+        if r > 170 and r > g + 40 and r > b + 40:
+            red += 1
+        if g > 170 and g > r + 30 and g > b + 30:
+            green += 1
+        if r > 180 and g > 140 and b < 80:
+            game += 1
+        elif b > 100 and b > r + 30 and b > g + 20 and r < 120:
+            game += 1
+    return not flat and red >= 40 and green >= 40 and game >= 20
+
+
+def _rgb_frame(movie: Path, index: int):
+    probe = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "csv=p=0", str(movie),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=20,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return None
+    parts = probe.stdout.decode().strip().split(",")
+    if len(parts) != 2:
+        return None
+    width, height = int(parts[0]), int(parts[1])
+    raw = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-i", str(movie),
+            "-vf", f"select=eq(n\\,{index})", "-vframes", "1",
+            "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=30,
+        check=False,
+    )
+    if raw.returncode != 0 or len(raw.stdout) != width * height * 3:
+        return None
+    return width, height, raw.stdout
+
+
 class StudioTest(unittest.TestCase):
     def setUp(self):
         self._display = studio.display_present
@@ -462,8 +517,20 @@ class StudioTest(unittest.TestCase):
             passed_rows = studio.read_trusted(directory)
             name = studio.test_name(studio.matched_parts(GOAL))
             self.assertEqual(studio.latest_row(passed_rows, name)["exit_code"], 0)
-            scene_hash = hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest()
+            scene_hash = studio.scene_hash(root)
             self.assertEqual(studio.latest_row(passed_rows, name)["scene"], scene_hash)
+            self.assertNotEqual(
+                scene_hash,
+                hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest(),
+            )
+            check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
+            self.assertIn("timeout.connect", check_text)
+            self.assertIn("time_scale = 30.0", check_text)
+            self.assertIn(studio.loop_body_sha256(), check_text)
+            self.assertNotIn('get("picked")', check_text)
+            self.assertNotIn('get("door_open")', check_text)
+            self.assertNotIn('get("won")', check_text)
+            self.assertNotIn("restarted", check_text)
             self.assertTrue(studio.latest_row(passed_rows, name)["godot"].startswith("4."))
             self.assertFalse((directory / "ledger.key").exists())
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
@@ -913,7 +980,10 @@ class StudioTest(unittest.TestCase):
             self.assertNotRegex(text, r"[0-9a-f]{64}")
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
             self.assertIn("read_string_from_stdin", check_text)
-            self.assertNotRegex(check_text, r"[0-9a-f]{64}")
+            self.assertEqual(
+                __import__("re").findall(r"[0-9a-f]{64}", check_text),
+                [studio.loop_body_sha256()],
+            )
             directory = studio.ledger_dir()
             rows = studio.read_trusted(directory)
             self.assertEqual(rows[-1]["exit_code"], 1)
@@ -954,10 +1024,17 @@ class StudioTest(unittest.TestCase):
             self.assertNotIn("sound=true", text)
             self.assertIn("exit=1", text)
             self.assertIn("exit_code=1", text)
-            scene = hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest()
+            scene = studio.scene_hash(root)
             self.assertEqual(__import__("re").findall(r"[0-9a-f]{64}", text), [scene])
+            self.assertNotEqual(
+                scene,
+                hashlib.sha256((root / "studio" / "loop.tscn").read_bytes()).hexdigest(),
+            )
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
-            self.assertNotRegex(check_text, r"[0-9a-f]{64}")
+            self.assertEqual(
+                __import__("re").findall(r"[0-9a-f]{64}", check_text),
+                [studio.loop_body_sha256()],
+            )
             directory = studio.ledger_dir()
             rows = studio.read_trusted(directory)
             self.assertEqual(rows[-1]["exit_code"], 1)
@@ -970,6 +1047,162 @@ class StudioTest(unittest.TestCase):
         self.assertIn("GAME_EDITOR_FAIL_LINE", studio.RECORD_GD)
         self.assertIn("GAME_EDITOR_PASS_LINE", studio.RECORD_GD)
         self.assertIn("test_axis", studio.RECORD_GD)
+
+    def test_package_loop_ignores_the_goal_line_only(self):
+        text = studio._loop_script("The key is picked. After 7, timeout_lose, then restart.")
+        self.assertIn("var limit_seconds := 7.0", text)
+        self.assertTrue(studio.is_package_loop_text(text))
+        self.assertFalse(studio.is_package_loop_text(text.replace("func _try_pickup", "func _try_pickup_gone", 1)))
+        swapped = text + "\nfunc _ready() -> void:\n    get_tree().quit(0)\n"
+        self.assertFalse(studio.is_package_loop_text(swapped))
+
+    def test_scene_hash_covers_the_script(self):
+        tmp, root = _project()
+        try:
+            (root / "studio").mkdir()
+            (root / "studio" / "loop.tscn").write_bytes(b"scene-bytes")
+            (root / "studio" / "loop.gd").write_bytes(b"script-bytes")
+            first = studio.scene_hash(root)
+            self.assertEqual(len(first), 64)
+            self.assertNotEqual(first, hashlib.sha256(b"scene-bytes").hexdigest())
+            (root / "studio" / "loop.gd").write_bytes(b"other-script")
+            self.assertNotEqual(studio.scene_hash(root), first)
+            (root / "studio" / "loop.gd").unlink()
+            self.assertEqual(studio.scene_hash(root), "missing")
+        finally:
+            tmp.cleanup()
+
+    def test_flag_script_is_not_a_pass(self):
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            (root / "studio").mkdir()
+            (root / "studio" / "loop.tscn").write_text(studio.LOOP_TSCN, encoding="utf-8")
+            (root / "studio" / "loop.gd").write_text(
+                "extends Node2D\n"
+                "signal restarted\n"
+                "var picked := false\n"
+                "var door_open := false\n"
+                "var won := false\n"
+                "var test_axis := Vector2.ZERO\n"
+                "var _sent := false\n"
+                "func _ready() -> void:\n"
+                "    picked = true\n"
+                "    door_open = true\n"
+                "    won = true\n"
+                "    var shape = get_node_or_null(\"Door/Shape\")\n"
+                "    if shape:\n"
+                "        shape.disabled = true\n"
+                "    var gen := AudioStreamGenerator.new()\n"
+                "    gen.mix_rate = 22050.0\n"
+                "    gen.buffer_length = 0.4\n"
+                "    $Beep.stream = gen\n"
+                "    $Beep.play()\n"
+                "func _process(_delta: float) -> void:\n"
+                "    if _sent:\n"
+                "        return\n"
+                "    _sent = true\n"
+                "    restarted.emit()\n",
+                encoding="utf-8",
+            )
+            result = studio.execute(
+                {"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            text = _text(result)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn(
+                "STUDIO_FAIL sound=false picked=false door=false timeout_lose=false restart=false",
+                text)
+            self.assertNotIn("sound=true", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
+            scene = studio.scene_hash(root)
+            official = hashlib.sha256(studio.LOOP_TSCN.encode("utf-8")).hexdigest()
+            self.assertNotEqual(scene, official)
+            self.assertEqual(__import__("re").findall(r"[0-9a-f]{64}", text), [scene])
+            self.assertEqual(studio.read_trusted(studio.ledger_dir())[-1]["exit_code"], 1)
+            self.assertEqual(studio.read_trusted(studio.ledger_dir())[-1]["scene"], scene)
+        finally:
+            tmp.cleanup()
+
+    def test_shader_cache_line_is_turned_off_for_a_recording(self):
+        text = studio._disable_shader_cache(
+            '[rendering]\nrenderer/rendering_method="gl_compatibility"\n')
+        self.assertIn("[rendering]\nshader_compiler/shader_cache/enabled=false\n", text)
+        self.assertEqual(
+            studio._disable_shader_cache(text).count("shader_compiler/shader_cache/enabled=false"),
+            1,
+        )
+        bare = studio._disable_shader_cache('config/name="StudioLoop"\n')
+        self.assertIn("\n[rendering]\nshader_compiler/shader_cache/enabled=false\n", bare)
+
+    def test_flat_clear_frame_is_not_a_verdict_picture(self):
+        self.assertFalse(_frame_shows_both_lines(8, 8, bytes([76, 76, 76]) * 64))
+        width, height = 32, 32
+        rgb = bytearray([0, 0, 0]) * (width * height)
+
+        def paint(x0, y0, x1, y1, color):
+            for y in range(y0, y1):
+                for x in range(x0, x1):
+                    i = (y * width + x) * 3
+                    rgb[i:i + 3] = bytes(color)
+
+        paint(2, 2, 14, 8, (255, 102, 102))
+        paint(2, 12, 14, 18, (153, 255, 153))
+        paint(18, 20, 28, 30, (242, 204, 38))
+        self.assertTrue(_frame_shows_both_lines(width, height, bytes(rgb)))
+        paint(18, 20, 28, 30, (0, 0, 0))
+        self.assertFalse(_frame_shows_both_lines(width, height, bytes(rgb)))
+
+    def test_movie_frame_shows_both_lines(self):
+        if studio.find_godot(None) is None or not self._display():
+            self.skipTest("godot display is not available")
+        if not __import__("shutil").which("ffmpeg") or not __import__("shutil").which("ffprobe"):
+            self.skipTest("ffmpeg is not installed")
+        tmp, root = _project()
+        studio.display_present = self._display
+        try:
+            loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(loop.get("isError"), _text(loop))
+            directory = studio.ledger_dir()
+            name = studio.test_name(studio.matched_parts(GOAL))
+            studio._append_ledger_row(directory, {
+                "bits": "sound=false picked=false door=false timeout_lose=false restart=false",
+                "exit_code": 1,
+                "godot": "4.7.2.stable",
+                "scene": "missing",
+                "test": name,
+                "time": "2026-10-26T00:00:01Z",
+            }, success=False)
+            studio._append_ledger_row(directory, {
+                "bits": "sound=true picked=true door=true timeout_lose=true restart=true",
+                "exit_code": 0,
+                "godot": "4.7.2.stable",
+                "scene": studio.scene_hash(root),
+                "test": name,
+                "time": "2026-10-26T00:00:02Z",
+            }, success=True)
+            recorded = studio.execute({"tool": "studio", "op": "record"}, str(root), None)
+            recorded_text = _text(recorded)
+            self.assertFalse(recorded.get("isError"), recorded_text)
+            self.assertIn("recorded res://studio/take.avi", recorded_text)
+            movie = root / "studio" / "take.avi"
+            self.assertTrue(movie.is_file())
+            self.assertGreater(movie.stat().st_size, 1000)
+            shown = []
+            for index in (40, 80):
+                frame = _rgb_frame(movie, index)
+                self.assertIsNotNone(frame, f"frame {index}")
+                width, height, rgb = frame
+                self.assertTrue(
+                    _frame_shows_both_lines(width, height, rgb),
+                    f"frame {index} is {width}x{height} and does not show both lines",
+                )
+                shown.append(index)
+            self.assertEqual(shown, [40, 80])
+        finally:
+            studio.display_present = lambda: False
+            tmp.cleanup()
 
 
 if __name__ == "__main__":

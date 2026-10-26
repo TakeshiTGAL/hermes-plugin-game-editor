@@ -6,7 +6,8 @@
 - The pinned export-template cache is `plugin-data/game-editor/export-templates`. The previous 127.0.0.1 page stops before the next Web export.
 - `studio` op `web` downloads the pinned Godot 4.7.2 export template only after sha256 and sha512 match, writes `build/web/index.html` and `build/web.zip`, and serves the page on 127.0.0.1. It does not upload.
 - `studio` op `import_asset` copies a GLB or an audio file, sets scale and a bottom-center pivot, adds a box or convex collision for a mesh, and appends one CREDITS line. Source and license come from a sibling origin file, or `unknown`.
-- `studio` op `record` runs Movie Maker only when a display exists. With a display, the picture shows the loop playing under the ledger lines from a failed row and a later exit 0. With no display it says the movie was not recorded. Headless `--write-movie` on Godot 4.7.2 exits with signal 11 (SIGSEGV in texture_2d_get, parameter t is null). A still is not saved in its place.
+- `studio` op `record` runs Movie Maker only when a display exists. With a display, the picture shows the loop playing under the ledger lines from a failed row and a later exit 0. The record run turns the GLES shader cache off, so a stale cache does not leave a flat clear frame. With no display it says the movie was not recorded. Headless `--write-movie` on Godot 4.7.2 exits with signal 11 (SIGSEGV in texture_2d_get, parameter t is null). A still is not saved in its place.
+- The check scores the key becoming a child of the player, the door moving up, the generated beep, and the Limit timer on the fresh round. It does not read the loop's own flags. A `loop.gd` this package did not write is not a pass. The scene hash covers `loop.tscn` and `loop.gd`. After the win, `Engine.time_scale` is 30, so the in-game 60 seconds finish in about two seconds of wall clock.
 - `ship_build` still does not download export templates.
 
 ## 1.2.3

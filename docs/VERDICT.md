@@ -17,7 +17,7 @@ The check scores only the parts the sentence matched. The model does not write t
 
 A `STUDIO` line printed by the loop is not the pass. A loop that prints `STUDIO` and quits 0 is a fail.
 
-`fell=true` means the body has settled on the floor. `sound=true` means a player was observed playing, including a generated beep. `picked=true` means the pickup happened. `door=true` means the door is open and its collision shape is disabled. `timeout_lose=true` means the timer ended the round. `restart=true` means the round started over.
+`fell=true` means the body has settled on the floor. `sound=true` means the generated beep was playing after the pickup. `picked=true` means the key node became a child of the player during the run, and it was not a child at the start. `door=true` means the door moved up and its collision shape is disabled. `timeout_lose=true` means the round timer fired. `restart=true` means that timer fired on the fresh round after the win. The check does not read the loop's own flags. A loop script this package did not write is not a pass. After the win, Godot scores the in-game 60 seconds at `Engine.time_scale` 30, so the wall clock is a few seconds. The scene hash covers the scene and the script.
 
 The sentence `The key is picked and a sound plays and the door opens. After 60, timeout_lose, then restart.` matches `sound`, `picked`, `door`, `timeout_lose` and `restart`. It does not match `fell`. The part name has to be that whole word. `paint the floor`, a count of seconds, `collect` and `try again` match nothing.
 

@@ -332,10 +332,46 @@ def godot_version(binary: str) -> str:
 
 
 def scene_hash(root: Path) -> str:
-    path = root / "studio" / "loop.tscn"
+    """Hash the scene and the loop script. A swapped script cannot keep the scene-only hash."""
+    chunks: list[bytes] = []
+    for name in ("loop.tscn", "loop.gd"):
+        path = root / "studio" / name
+        if not path.is_file() or path.is_symlink():
+            return "missing"
+        chunks.append(name.encode("ascii") + b"\0" + path.read_bytes())
+    return hashlib.sha256(b"\0".join(chunks)).hexdigest()
+
+
+def normalized_loop_body(text: str) -> str:
+    """The package script, with the goal comment and the second limit folded back."""
+    out: list[str] = []
+    for line in text.split("\n"):
+        if line.startswith("# goal:"):
+            out.append("# goal:")
+        elif line.startswith("var limit_seconds :="):
+            out.append("var limit_seconds := 60.0")
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def loop_body_sha256() -> str:
+    return hashlib.sha256(normalized_loop_body(LOOP_GD).encode("utf-8")).hexdigest()
+
+
+def is_package_loop_text(text: str) -> bool:
+    return normalized_loop_body(text) == normalized_loop_body(LOOP_GD)
+
+
+def is_package_loop(root: Path) -> bool:
+    path = root / "studio" / "loop.gd"
     if not path.is_file() or path.is_symlink():
-        return "missing"
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+        return False
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return False
+    return is_package_loop_text(text)
 
 
 def _bits_from_line(line: str, parts: tuple[str, ...]) -> str:
@@ -395,6 +431,7 @@ def _check_script(parts: tuple[str, ...]) -> str:
         CHECK_GD_TEMPLATE
         .replace("__PARTS__", quoted)
         .replace("__TEST_NAME__", test_name(parts))
+        .replace("__LOOP_BODY_SHA256__", loop_body_sha256())
     )
 
 
@@ -702,6 +739,16 @@ def _project_text(current: str, main_scene: str | None) -> str:
     if not text.endswith("\n"):
         text += "\n"
     return text
+
+
+def _disable_shader_cache(project: str) -> str:
+    """A stale GLES shader cache for this project name records a flat clear frame."""
+    line = "shader_compiler/shader_cache/enabled=false"
+    if re.search(r"(?m)^shader_compiler/shader_cache/enabled=", project):
+        return re.sub(r"(?m)^shader_compiler/shader_cache/enabled=.*$", line, project)
+    if "[rendering]" in project:
+        return project.replace("[rendering]\n", "[rendering]\n" + line + "\n", 1)
+    return project + "\n[rendering]\n" + line + "\n"
 
 
 def _loop_script(goal: str) -> str:
@@ -1209,6 +1256,12 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "The check prints the observation line after it watches the loop."
         )
         lines.append(
+            "It scores the key becoming a child of the player and the Limit timer firing, "
+            "not flags the loop assigns. A loop.gd this package did not write is not a pass. "
+            "After the win, Engine.time_scale is 30, so the in-game 60 seconds finish in about two seconds of wall clock. "
+            "The scene hash covers loop.tscn and loop.gd."
+        )
+        lines.append(
             "The run uses a project file with no autoloads, then puts an existing project.godot back."
         )
         lines.append(
@@ -1379,6 +1432,10 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         bits = " ".join(f"{part}=false" for part in parts)
     else:
         passed_line, bits = observed
+    # A replaced loop.gd is not a pass, even when Godot was talked into exit 0.
+    if not is_package_loop(root):
+        passed_line = False
+        bits = " ".join(f"{part}=false" for part in parts)
     if directory is None:
         shown = ("STUDIO " if passed_line else "STUDIO_FAIL ") + bits
         reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME is unset\nplan_digest: {plan_digest(step)}"
@@ -1542,7 +1599,7 @@ def _execute_record(step: dict, root: Path, godot: str) -> dict:
         "studio/record.tscn": RECORD_TSCN.encode("utf-8"),
     }
     before_project = _read_text(root, "project.godot")
-    project = _project_text(before_project, "res://studio/record.tscn")
+    project = _disable_shader_cache(_project_text(before_project, "res://studio/record.tscn"))
     files["project.godot"] = project.encode("utf-8")
     before = _names(root)
     _write_files(root, files)
@@ -1815,6 +1872,7 @@ CHECK_GD_TEMPLATE = """extends Node
 
 var required := PackedStringArray([__PARTS__])
 var test_name := "__TEST_NAME__"
+var expected_loop := "__LOOP_BODY_SHA256__"
 var _emit: Callable
 var _done := false
 
@@ -1824,6 +1882,10 @@ func _ready() -> void:
         get_tree().quit(1)
         return
     _emit = _bind(secret, self)
+    if _loop_body_sha() != expected_loop:
+        if _emit.call("reject"):
+            _seal()
+        return
     if not ResourceLoader.exists("res://studio/loop.tscn"):
         _seal()
         return
@@ -1837,10 +1899,10 @@ func _process(_delta: float) -> void:
     if _emit.call("tick"):
         _seal()
 
-func _on_restarted() -> void:
+func _on_limit_timeout() -> void:
     if _done or not _emit.is_valid():
         return
-    if _emit.call("restarted"):
+    if _emit.call("timeout"):
         _seal()
 
 func _exit_tree() -> void:
@@ -1856,6 +1918,24 @@ func _seal() -> void:
     else:
         get_tree().quit(1)
 
+func _loop_body_sha() -> String:
+    if not FileAccess.file_exists("res://studio/loop.gd"):
+        return ""
+    var text := FileAccess.get_file_as_string("res://studio/loop.gd")
+    var lines := text.split("\\n")
+    var out: PackedStringArray = []
+    for line in lines:
+        if line.begins_with("# goal:"):
+            out.append("# goal:")
+        elif line.begins_with("var limit_seconds :="):
+            out.append("var limit_seconds := 60.0")
+        else:
+            out.append(line)
+    var ctx := HashingContext.new()
+    ctx.start(HashingContext.HASH_SHA256)
+    ctx.update("\\n".join(out).to_utf8_buffer())
+    return ctx.finish().hex_encode().to_lower()
+
 func _bind(secret: String, host: Node) -> Callable:
     var state := {
         "fell": false,
@@ -1869,6 +1949,9 @@ func _bind(secret: String, host: Node) -> Callable:
         "started": Time.get_ticks_msec(),
         "sealed": false,
         "force_fail": false,
+        "loose": false,
+        "door_marked": false,
+        "door_y0": 0.0,
     }
 
     var needed := func(part: String) -> bool:
@@ -1908,13 +1991,40 @@ func _bind(secret: String, host: Node) -> Callable:
             return false
         return true
 
+    var reset_seen := func() -> bool:
+        var again = host.get_node_or_null("Loop")
+        if again == null:
+            return false
+        var body = again.get_node_or_null("Player")
+        var door_node = again.get_node_or_null("Door")
+        var door_shape = again.get_node_or_null("Door/Shape")
+        if body == null or door_node == null or door_shape == null:
+            return false
+        if body.get_node_or_null("Key") != null:
+            return false
+        if again.get_node_or_null("Key") == null:
+            return false
+        if door_shape.disabled:
+            return false
+        if body.position.x > -100.0:
+            return false
+        return abs(door_node.position.y - 168.0) < 12.0
+
     return func(cmd: String) -> bool:
         if state["sealed"]:
             return false
-        if cmd == "restarted":
-            state["timeout_lose"] = true
-            state["restart"] = true
+        if cmd == "reject":
+            state["force_fail"] = true
             return true
+        if cmd == "timeout":
+            # This signal is connected only on the fresh round, after the win.
+            if int(state["phase"]) == 3:
+                state["timeout_lose"] = true
+                state["restart"] = true
+            elif reset_seen.call():
+                state["timeout_lose"] = true
+                state["restart"] = true
+            return satisfied.call()
         if cmd == "finish":
             state["sealed"] = true
             var ok: bool = (not state["force_fail"]) and satisfied.call()
@@ -1931,50 +2041,70 @@ func _bind(secret: String, host: Node) -> Callable:
         if loop == null:
             return false
         state["frames"] = int(state["frames"]) + 1
+        var player = loop.get_node_or_null("Player")
         var key = loop.get_node_or_null("Key")
         var floor = loop.get_node_or_null("Floor")
-        if key is RigidBody2D and floor and key.position.y > floor.position.y - 40.0 and abs(key.linear_velocity.y) < 40.0:
+        if key is RigidBody2D and floor and key.get_parent() == loop and key.position.y > floor.position.y - 40.0 and abs(key.linear_velocity.y) < 40.0:
             state["fell"] = true
-        if loop.get("picked") == true:
+        if key != null and player != null and key.get_parent() != player:
+            state["loose"] = true
+        if key == null and player != null:
+            key = player.get_node_or_null("Key")
+        if state["loose"] and key != null and player != null and key.get_parent() == player:
             state["picked"] = true
         var beep = loop.get_node_or_null("Beep")
-        if beep and beep.playing:
+        if state["picked"] and beep != null and beep.playing and beep.stream is AudioStreamGenerator:
             state["sound"] = true
+        var door = loop.get_node_or_null("Door")
         var shape = loop.get_node_or_null("Door/Shape")
-        if shape and loop.get("door_open") == true and shape.disabled:
+        if door != null and not state["door_marked"]:
+            state["door_marked"] = true
+            state["door_y0"] = door.position.y
+        if state["picked"] and shape != null and door != null and shape.disabled and float(state["door_y0"]) - door.position.y > 40.0:
             state["door"] = true
         var phase := int(state["phase"])
         var frames := int(state["frames"])
         if phase == 0 and state["fell"] and frames > 20:
             phase = 1
-        var player = loop.get_node_or_null("Player")
-        if phase == 1 and not state["picked"] and key and player:
+        if phase == 1 and not state["picked"] and key != null and player != null and key.get_parent() != player:
             var aim: Vector2 = key.global_position - player.global_position
             loop.set("test_axis", aim.normalized() if aim.length() > 6.0 else Vector2.ZERO)
         if phase == 1 and state["picked"] and state["door"]:
             phase = 2
         var exit_node = loop.get_node_or_null("Exit")
-        if phase == 2 and loop.get("won") != true and player and exit_node:
+        if phase == 2 and player != null and exit_node != null:
             var aim2: Vector2 = exit_node.global_position - player.global_position
-            loop.set("test_axis", aim2.normalized() if aim2.length() > 6.0 else Vector2.ZERO)
-        if phase == 2 and loop.get("won") == true:
-            if not wants_timeout.call():
+            if aim2.length() > 28.0:
+                loop.set("test_axis", aim2.normalized())
+            elif state["picked"] and state["door"]:
+                if not wants_timeout.call():
+                    state["phase"] = phase
+                    return true
+                # Freeing under the same name makes Godot rename the fresh round, so the check would watch the finished one.
+                loop.name = "Finished"
+                loop.process_mode = Node.PROCESS_MODE_DISABLED
+                loop.queue_free()
+                phase = 3
                 state["phase"] = phase
-                return true
-            loop.queue_free()
-            phase = 3
-            state["frames"] = 0
-            Engine.time_scale = 30.0
-            var again = load("res://studio/loop.tscn").instantiate()
-            again.name = "Loop"
-            if again.has_signal("restarted"):
-                again.restarted.connect(host._on_restarted)
-            host.add_child(again)
+                state["frames"] = 0
+                # The in-game 60 seconds are scored here, in about two seconds of wall clock.
+                Engine.time_scale = 30.0
+                var spawned = load("res://studio/loop.tscn").instantiate()
+                spawned.name = "Loop"
+                var limit = spawned.get_node_or_null("Limit")
+                if limit != null:
+                    limit.timeout.connect(host._on_limit_timeout)
+                host.add_child(spawned)
+                return false
         state["phase"] = phase
+        if phase == 3 and state["timeout_lose"] and not state["restart"] and reset_seen.call():
+            state["restart"] = true
         if phase == 3 and int(state["frames"]) > 400 and not state["restart"]:
             state["force_fail"] = true
             return true
         if not wants_timeout.call() and satisfied.call():
+            return true
+        if phase == 3 and satisfied.call():
             return true
         return false
 """
