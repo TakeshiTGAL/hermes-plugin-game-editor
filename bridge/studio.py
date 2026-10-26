@@ -19,6 +19,7 @@ import stat
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import zipfile
 from datetime import datetime, timezone
@@ -855,6 +856,7 @@ def _run(
     timeout: int,
     extra: dict[str, str] | None = None,
     stdin: bytes | None = None,
+    cwd: Path | None = None,
 ) -> tuple[int, str]:
     proc = subprocess.Popen(
         cmd,
@@ -862,6 +864,7 @@ def _run(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=child_env(extra),
+        cwd=str(cwd) if cwd is not None else None,
     )
     try:
         out, _ = proc.communicate(stdin, timeout=timeout)
@@ -892,6 +895,211 @@ def _frames_line(output: str) -> str:
         if text.startswith("physics_frames=") and text[len("physics_frames="):].isdigit():
             found = text
     return found
+
+
+def frames_cover(parts: tuple[str, ...], seconds: int, frames_line: str) -> bool:
+    """timeout_lose and restart need physics frames, not a wall clock.
+
+    A sentence that names neither part does not need the line. A missing line,
+    or a count below the sentence's seconds times 60, is not a pass.
+    """
+    if "timeout_lose" not in parts and "restart" not in parts:
+        return True
+    prefix = "physics_frames="
+    if not frames_line.startswith(prefix):
+        return False
+    raw = frames_line[len(prefix):]
+    if not raw.isdigit():
+        return False
+    return int(raw) >= int(seconds) * 60
+
+
+def _cfg_autoload_paths(text: str) -> list[str]:
+    """res:// or uid:// paths under a [autoload] section. A line we cannot name is res://override.cfg."""
+    found: list[str] = []
+    in_auto = False
+    for raw in text.lstrip("\ufeff").splitlines():
+        line = raw.strip()
+        if not line or line.startswith(";") or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            in_auto = line == "[autoload]"
+            continue
+        if not in_auto or "=" not in line:
+            continue
+        match = re.search(r'"(\*?)([^"]*)"', line)
+        token = match.group(2).strip() if match else ""
+        if token.startswith("*"):
+            token = token[1:]
+        if token.startswith("res://") or token.startswith("uid://"):
+            if " " not in token and ".." not in token.split("/"):
+                found.append(token)
+                continue
+        found.append("res://override.cfg")
+    return found
+
+
+def _cfg_file_text(path: Path) -> str | None:
+    """None means the file is there and must not be trusted. '' means it is absent."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return ""
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        return None
+    if info.st_size > 1024 * 1024:
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return None
+
+
+def _declared_autoload(root: Path) -> str:
+    """An autoload Godot would attach from project.godot or override.cfg. Empty if none.
+
+    Godot 4.7 loads res://override.cfg from the --path directory on top of project.godot,
+    before the main scene. A path here means that process is not started.
+    """
+    for relative in ("override.cfg", "project.godot"):
+        text = _cfg_file_text(root / relative)
+        if text is None:
+            return "res://" + relative
+        paths = _cfg_autoload_paths(text)
+        if paths:
+            return paths[0]
+    project = _cfg_file_text(root / "project.godot")
+    if not project:
+        return ""
+    match = re.search(r'(?m)^config/project_settings_override="(res://[^"]+)"', project)
+    if not match:
+        return ""
+    relative = match.group(1)[len("res://"):]
+    if not relative or relative.startswith("/") or ".." in Path(relative).parts:
+        return "res://override.cfg"
+    text = _cfg_file_text(root / relative)
+    if text is None:
+        return "res://" + relative if " " not in relative else "res://override.cfg"
+    paths = _cfg_autoload_paths(text)
+    return paths[0] if paths else ""
+
+
+def _stage_project_text() -> str:
+    """A project file this process writes. It is not the open project's file.
+
+    Measured on Godot 4.7.2: config/disable_project_settings_override=true
+    stops res://override.cfg from loading. The stage also does not contain that file.
+    """
+    text = _project_text("", "res://studio/check.tscn")
+    line = "config/disable_project_settings_override=true\n"
+    if "[application]\n" in text:
+        return text.replace("[application]\n", "[application]\n" + line, 1)
+    return text + "\n[application]\n" + line
+
+
+def _scene_refs(text: str) -> list[str]:
+    found = []
+    for match in re.finditer(r'path="(res://[^"]+\.tscn)"', text):
+        relative = match.group(1)[len("res://"):]
+        if relative.startswith("/") or ".." in Path(relative).parts:
+            continue
+        if relative not in found:
+            found.append(relative)
+    return found
+
+
+def _read_regular(root: Path, relative: str, limit: int) -> bytes | None:
+    path = root / relative
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+        return None
+    try:
+        return path.read_bytes()
+    except OSError:
+        return None
+
+
+def _stage_payload(root: Path, check_body: bytes) -> dict[str, bytes]:
+    """Files the verdict process may see. override.cfg is not one of them."""
+    payload = {
+        "project.godot": _stage_project_text().encode("utf-8"),
+        "studio/check.gd": check_body,
+        "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
+        "studio/_scan_project.godot": (_cfg_file_text(root / "project.godot") or "").encode("utf-8"),
+    }
+    override = _cfg_file_text(root / "override.cfg")
+    payload["studio/_scan_override.cfg"] = (override or "").encode("utf-8")
+    loop_gd = _read_regular(root, "studio/loop.gd", 1024 * 1024)
+    if loop_gd is not None:
+        payload["studio/loop.gd"] = loop_gd
+    queue = ["studio/loop.tscn"]
+    seen: set[str] = set()
+    while queue:
+        relative = queue.pop()
+        if relative in seen:
+            continue
+        seen.add(relative)
+        data = _read_regular(root, relative, 1024 * 1024)
+        if data is None:
+            continue
+        payload[relative] = data
+        try:
+            text = data.decode("utf-8")
+        except UnicodeError:
+            continue
+        for child in _scene_refs(text):
+            queue.append(child)
+    return payload
+
+
+def _make_stage(directory: Path | None) -> Path:
+    token = secrets.token_hex(8)
+    if directory is not None:
+        parent = directory / "stages"
+        if parent.is_symlink():
+            raise Refused("game-editor: studio refused a symlink stage directory.")
+        parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(parent, 0o700)
+        stage = parent / token
+        stage.mkdir(mode=0o700)
+        os.chmod(stage, 0o700)
+        return stage
+    stage = Path(tempfile.mkdtemp(prefix=f"game-editor-stage-{token}-"))
+    os.chmod(stage, 0o700)
+    return stage
+
+
+def _write_stage(stage: Path, payload: dict[str, bytes]) -> None:
+    for relative, data in payload.items():
+        if relative == "override.cfg" or relative.startswith("/") or ".." in Path(relative).parts:
+            raise Refused("game-editor: studio refused a stage path.")
+        path = stage / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o644)
+        try:
+            os.write(fd, data)
+        finally:
+            os.close(fd)
+    found = _names(stage)
+    if found != set(payload):
+        raise Refused("game-editor: studio stage has an unexpected file.")
+
+
+def _discard_dir(path: Path) -> None:
+    if path.is_symlink():
+        path.unlink()
+        return
+    if not path.is_dir():
+        return
+    for child in list(path.iterdir()):
+        if child.is_symlink() or not child.is_dir():
+            child.unlink()
+        else:
+            _discard_dir(child)
+    path.rmdir()
 
 
 def _observed_verdict(output: str, nonce: str) -> tuple[bool, str] | None:
@@ -1346,8 +1554,13 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "It scores the key becoming a child of the player, not flags the loop assigns. "
             "The running root has to be the loop.gd this package wrote. "
             "Keeping that file and attaching another script is not a pass. "
-            "A child script, an inherited scene, an autoload, or any other resource this package did not write "
-            "fails as unverified script: and the path, before that script runs. "
+            "A child script, an inherited scene, an autoload in project.godot or override.cfg, "
+            "or any other resource this package did not write "
+            "fails as unverified script: and the path. "
+            "Godot is not started when that autoload is declared. "
+            "Otherwise Godot is started with --path on a directory this process creates. "
+            "That directory gets a project.godot this process writes and the check and loop files. "
+            "override.cfg is not copied. "
             "timeout_lose counts physics frames only: the sentence's seconds times 60, so 60 seconds is 3600 frames, "
             "with Engine.time_scale held at 1. The Limit timeout signal is not a pass. "
             "Stopping Limit before those frames is not exit 0. "
@@ -1356,11 +1569,10 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "The scene hash covers loop.tscn and loop.gd."
         )
         lines.append(
-            "The run uses a project file with no autoloads, then puts an existing project.godot back."
-        )
-        lines.append(
             "After that process exits, this bridge appends the ledger row. "
-            "Exit 0 is recorded only when that process returned 0 and the check's observation line is a pass. "
+            "Exit 0 is recorded only when that process returned 0, check.gd is unchanged, "
+            "the check's observation line is a pass, and, when the sentence names timeout_lose or restart, "
+            "physics_frames is at least the sentence's seconds times 60. "
             "The Godot process does not write the row and is not given a ledger key."
         )
     elif op == "loop":
@@ -1493,41 +1705,60 @@ def _write_files(root: Path, files: dict[str, bytes]) -> None:
 def _execute_test(step: dict, root: Path, godot: str) -> dict:
     """Run the packaged check. This process appends the one ledger row after wait()."""
     parts = require_parts(step.get("goal") or "")
+    seconds = limit_seconds(step.get("goal") or "")
     name = test_name(parts)
     # The nonce is not written into the project and is not an environment variable.
     # The check reads it from stdin before it adds the loop. A loop print cannot carry it.
     nonce = secrets.token_hex(32)
-    before_project = _read_text(root, "project.godot")
-    had_project = (root / "project.godot").is_file() and not (root / "project.godot").is_symlink()
+    check_body = _check_script(parts, seconds).encode("utf-8")
     files = {
-        "studio/check.gd": _check_script(parts, limit_seconds(step.get("goal") or "")).encode("utf-8"),
+        "studio/check.gd": check_body,
         "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
-        # The running project has no autoloads. The check reads this copy and counts them.
-        "studio/_scan_project.godot": before_project.encode("utf-8"),
-        "project.godot": _project_text("", "res://studio/check.tscn").encode("utf-8"),
     }
     before = _names(root)
     directory = ledger_dir()
     before_ledger = _ledger_text(directory) if directory is not None else None
     _write_files(root, files)
+    # Godot 4.7 loads res://override.cfg from --path before the main scene. Count it
+    # here and do not start that process. The verdict --path is a directory that
+    # contains only files this process just wrote.
+    declared = _declared_autoload(root)
+    code = 1
+    output = ""
+    check_same = True
+    stage: Path | None = None
     try:
-        code, output = _run(
-            [godot, "--headless", "--fixed-fps", "60", "--path", str(root), "res://studio/check.tscn"],
-            150,
-            stdin=(nonce + "\n").encode("ascii"),
-        )
-    finally:
-        scan = root / "studio" / "_scan_project.godot"
-        if scan.is_file() and not scan.is_symlink():
-            scan.unlink()
-        if had_project:
-            _write(root, "project.godot", before_project.encode("utf-8"))
+        if declared:
+            output = f"unverified script: {declared}\n"
         else:
-            _write(root, "project.godot", _project_text("", None).encode("utf-8"))
+            stage = _make_stage(directory)
+            _write_stage(stage, _stage_payload(root, check_body))
+            if (stage / "override.cfg").exists():
+                output = "unverified script: res://override.cfg\n"
+            else:
+                code, output = _run(
+                    [godot, "--headless", "--fixed-fps", "60", "--path", str(stage), "res://studio/check.tscn"],
+                    150,
+                    stdin=(nonce + "\n").encode("ascii"),
+                    cwd=stage,
+                )
+                check_path = stage / "studio" / "check.gd"
+                try:
+                    check_same = (
+                        check_path.is_file()
+                        and not check_path.is_symlink()
+                        and check_path.read_bytes() == check_body
+                    )
+                except OSError:
+                    check_same = False
+    finally:
+        if stage is not None:
+            _discard_dir(stage)
     _sweep(root, before, ("studio/",))
     observed = _observed_verdict(output, nonce)
     foreign = _foreign_line(output)
     frames = _frames_line(output)
+    frames_ok = frames_cover(parts, seconds, frames)
     if observed is None:
         passed_line = False
         bits = " ".join(f"{part}=false" for part in parts)
@@ -1544,7 +1775,15 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
             reply = foreign + "\n" + reply
         return _err(reply)
     tampered = _ledger_text(directory) != before_ledger
-    passed = code == 0 and passed_line and not tampered and not foreign and _parts_all_true(bits, parts)
+    passed = (
+        code == 0
+        and passed_line
+        and not tampered
+        and not foreign
+        and check_same
+        and frames_ok
+        and _parts_all_true(bits, parts)
+    )
     if tampered:
         note = "ledger: changed outside the godot process"
     else:
@@ -2185,9 +2424,16 @@ func _scan_scene(path: String, seen: Dictionary) -> String:
     return ""
 
 func _scan_autoloads() -> String:
-    var path := "res://studio/_scan_project.godot"
+    var overlay := _scan_autoload_file("res://studio/_scan_override.cfg", false)
+    if overlay != "":
+        return overlay
+    return _scan_autoload_file("res://studio/_scan_project.godot", true)
+
+func _scan_autoload_file(path: String, required: bool) -> String:
     if not FileAccess.file_exists(path):
-        return path
+        if required:
+            return path
+        return ""
     var in_auto := false
     for raw in FileAccess.get_file_as_string(path).split("\\n"):
         var line := raw.strip_edges()

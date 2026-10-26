@@ -921,7 +921,7 @@ class StudioTest(unittest.TestCase):
             self.assertIsNotNone(directory)
             directory.mkdir(parents=True)
 
-            def fake_run(_cmd, _timeout, extra=None, stdin=None):
+            def fake_run(_cmd, _timeout, extra=None, stdin=None, cwd=None):
                 del extra, stdin
                 forged = {
                     "bits": "picked=true",
@@ -1110,7 +1110,7 @@ class StudioTest(unittest.TestCase):
     def test_a_printed_studio_line_is_not_a_pass(self):
         tmp, root = _project()
         try:
-            def fake_run(cmd, _timeout, extra=None, stdin=None):
+            def fake_run(cmd, _timeout, extra=None, stdin=None, cwd=None):
                 del extra
                 if cmd and cmd[-1] == "res://studio/check.tscn":
                     self.assertIsNotNone(stdin)
@@ -1497,6 +1497,100 @@ class StudioTest(unittest.TestCase):
             self.assertTrue(inherited.get("isError"), inherited_text)
             self.assertIn("unverified script: res://studio/base.gd", inherited_text)
             self.assertIn("exit_code=1", inherited_text)
+            self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
+        finally:
+            tmp.cleanup()
+
+    def test_override_cfg_autoload_is_named_before_godot_starts(self):
+        """Godot 4.7 loads res://override.cfg before the main scene. Do not start it."""
+        self.assertEqual(
+            studio._cfg_autoload_paths('[autoload]\nForge="*res://studio/forge.gd"\n'),
+            ["res://studio/forge.gd"],
+        )
+        self.assertFalse(studio.frames_cover(studio.matched_parts(GOAL), 60, ""))
+        self.assertFalse(studio.frames_cover(studio.matched_parts(GOAL), 60, "physics_frames=3599"))
+        self.assertTrue(studio.frames_cover(studio.matched_parts(GOAL), 60, "physics_frames=3600"))
+        self.assertTrue(studio.frames_cover(("picked",), 60, ""))
+        staged = studio._stage_project_text()
+        self.assertIn("config/disable_project_settings_override=true", staged)
+        self.assertNotIn("[autoload]", staged)
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(loop.get("isError"), _text(loop))
+            (root / "studio" / "forge.gd").write_text(
+                "extends Node\n"
+                "func _init() -> void:\n"
+                "\tprint(\"REWRITE\")\n"
+                "\tvar out := FileAccess.open(\"res://studio/ran.txt\", FileAccess.WRITE)\n"
+                "\tif out:\n"
+                "\t\tout.store_string(\"ran\")\n"
+                "\t\tout.close()\n"
+                "\tvar check := FileAccess.open(\"res://studio/check.gd\", FileAccess.WRITE)\n"
+                "\tif check:\n"
+                "\t\tcheck.store_string(\"extends Node\\nfunc _ready():\\n\\tprint(\\\"FORGED\\\")\\n\\tget_tree().quit(0)\\n\")\n"
+                "\t\tcheck.close()\n",
+                encoding="utf-8",
+            )
+            (root / "override.cfg").write_text(
+                '[autoload]\nForge="*res://studio/forge.gd"\n',
+                encoding="utf-8",
+            )
+            started = time.monotonic()
+            result = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            elapsed = time.monotonic() - started
+            text = _text(result)
+            self.assertLess(elapsed, 5.0, text)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("unverified script: res://studio/forge.gd", text)
+            self.assertNotIn("REWRITE", text)
+            self.assertNotIn("FORGED", text)
+            self.assertNotIn("sound=true", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
+            self.assertFalse((root / "studio" / "ran.txt").exists())
+            check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
+            self.assertIn("get_physics_frames", check_text)
+            self.assertNotIn("FORGED", check_text)
+            self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
+            web = studio.execute({"tool": "studio", "op": "web"}, str(root), None)
+            web_text = _text(web)
+            self.assertTrue(web.get("isError"), web_text)
+            self.assertIn("not served", web_text)
+            self.assertNotIn("url: http", web_text)
+        finally:
+            tmp.cleanup()
+
+    def test_print_only_override_cfg_is_not_a_pass(self):
+        """An autoload that only prints still must not ride along with exit 0."""
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(loop.get("isError"), _text(loop))
+            (root / "studio" / "overlay.gd").write_text(
+                "extends Node\nfunc _init() -> void:\n\tprint(\"OVERRIDE_RAN\")\n",
+                encoding="utf-8",
+            )
+            (root / "override.cfg").write_text(
+                '[autoload]\nOverlay="*res://studio/overlay.gd"\n',
+                encoding="utf-8",
+            )
+            started = time.monotonic()
+            result = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+            elapsed = time.monotonic() - started
+            text = _text(result)
+            self.assertLess(elapsed, 5.0, text)
+            self.assertTrue(result.get("isError"), text)
+            self.assertIn("unverified script: res://studio/overlay.gd", text)
+            self.assertNotIn("OVERRIDE_RAN", text)
+            self.assertNotIn("STUDIO sound=true", text)
+            self.assertNotIn("physics_frames=3602", text)
+            self.assertIn("exit=1", text)
+            self.assertIn("exit_code=1", text)
             self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
         finally:
             tmp.cleanup()
