@@ -343,21 +343,11 @@ def scene_hash(root: Path) -> str:
     return hashlib.sha256(b"\0".join(chunks)).hexdigest()
 
 
-def normalized_loop_body(text: str) -> str:
-    """The package script, with the goal comment and the second limit folded back."""
-    out: list[str] = []
-    for line in text.split("\n"):
-        if line.startswith("# goal:"):
-            out.append("# goal:")
-        elif line.startswith("var limit_seconds :="):
-            out.append("var limit_seconds := 60.0")
-        else:
-            out.append(line)
-    return "\n".join(out)
-
-
-def loop_body_sha256() -> str:
-    return hashlib.sha256(normalized_loop_body(LOOP_GD).encode("utf-8")).hexdigest()
+def loop_body_sha256(goal: str | None = None) -> str:
+    """sha256 of the exact script this process writes for the sentence."""
+    if goal is None:
+        goal = EXAMPLE_GOAL
+    return hashlib.sha256(_loop_script(goal).encode("utf-8")).hexdigest()
 
 
 def package_scene_sha256() -> str:
@@ -422,19 +412,46 @@ def _remember_written(relative: str, data: bytes) -> None:
     os.replace(temporary, path)
 
 
-def is_package_loop_text(text: str) -> bool:
-    return normalized_loop_body(text) == normalized_loop_body(LOOP_GD)
+def is_package_loop_text(text: str, goal: str | None = None) -> bool:
+    """True only when every line is a line this process writes for that sentence.
+
+    The limit line has to be ``var limit_seconds := <seconds>.0`` and nothing else.
+    Folding the rest of that line away would still run a call written on it.
+    """
+    if goal is None:
+        goal = EXAMPLE_GOAL
+    return text == _loop_script(goal)
 
 
-def is_package_loop(root: Path) -> bool:
+def is_package_loop(root: Path, goal: str | None = None) -> bool:
     path = root / "studio" / "loop.gd"
     if not path.is_file() or path.is_symlink():
         return False
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
+        data = path.read_bytes()
+    except OSError:
         return False
-    return is_package_loop_text(text)
+    if goal is None:
+        goal = EXAMPLE_GOAL
+    return data == _loop_script(goal).encode("utf-8")
+
+
+def loop_script_foreign(root: Path, goal: str) -> bool:
+    """A loop.gd that exists and is not the bytes this process writes. A missing file is not foreign."""
+    path = root / "studio" / "loop.gd"
+    try:
+        present = path.is_symlink() or path.exists()
+    except OSError:
+        return True
+    if not present:
+        return False
+    if path.is_symlink() or not path.is_file():
+        return True
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return True
+    return data != _loop_script(goal).encode("utf-8")
 
 
 def _bits_from_line(line: str, parts: tuple[str, ...]) -> str:
@@ -488,17 +505,15 @@ def verdict_line(row: dict) -> str:
     return prefix + row["bits"]
 
 
-def _check_script(parts: tuple[str, ...], seconds: int) -> str:
+def _check_script(parts: tuple[str, ...], seconds: int, goal: str) -> str:
+    """The check embeds the sha256 of the bytes this process writes. It does not read the record."""
     quoted = ", ".join(json.dumps(part) for part in parts)
-    written = load_written()
     return (
         CHECK_GD_TEMPLATE
         .replace("__PARTS__", quoted)
         .replace("__TEST_NAME__", test_name(parts))
-        .replace("__LOOP_BODY_SHA256__", loop_body_sha256())
+        .replace("__LOOP_BODY_SHA256__", loop_body_sha256(goal))
         .replace("__EXPECTED_SECONDS__", f"{int(seconds)}.0")
-        .replace("__WRITTEN_LOOP__", _hex64(written.get("res://studio/loop.gd", "")))
-        .replace("__WRITTEN_SCENE__", _hex64(written.get("res://studio/loop.tscn", "")))
         .replace("__PACKAGE_SCENE__", package_scene_sha256())
     )
 
@@ -1022,8 +1037,12 @@ def _read_regular(root: Path, relative: str, limit: int) -> bytes | None:
         return None
 
 
-def _stage_payload(root: Path, check_body: bytes) -> dict[str, bytes]:
-    """Files the verdict process may see. override.cfg is not one of them."""
+def _stage_payload(root: Path, check_body: bytes, loop_bytes: bytes | None = None) -> dict[str, bytes]:
+    """Files the verdict process may see. override.cfg is not one of them.
+
+    loop_bytes, when set, are the bytes this process writes for the sentence.
+    The project's file is not copied a second time.
+    """
     payload = {
         "project.godot": _stage_project_text().encode("utf-8"),
         "studio/check.gd": check_body,
@@ -1032,9 +1051,8 @@ def _stage_payload(root: Path, check_body: bytes) -> dict[str, bytes]:
     }
     override = _cfg_file_text(root / "override.cfg")
     payload["studio/_scan_override.cfg"] = (override or "").encode("utf-8")
-    loop_gd = _read_regular(root, "studio/loop.gd", 1024 * 1024)
-    if loop_gd is not None:
-        payload["studio/loop.gd"] = loop_gd
+    if loop_bytes is not None:
+        payload["studio/loop.gd"] = loop_bytes
     queue = ["studio/loop.tscn"]
     seen: set[str] = set()
     while queue:
@@ -1537,7 +1555,7 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
     if op == "test":
         parts = require_parts(goal)
         files = {
-            "studio/check.gd": _check_script(parts, limit_seconds(goal)).encode("utf-8"),
+            "studio/check.gd": _check_script(parts, limit_seconds(goal), goal).encode("utf-8"),
             "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
         }
         losses.extend(_losses_for(base, files))
@@ -1558,6 +1576,9 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "or any other resource this package did not write "
             "fails as unverified script: and the path. "
             "Godot is not started when that autoload is declared. "
+            "A loop.gd whose bytes are not the script this process writes for that sentence "
+            "is unverified script: res://studio/loop.gd and Godot is not started. "
+            "The sha256 record is not the allow-list. "
             "Otherwise Godot is started with --path on a directory this process creates. "
             "That directory gets a project.godot this process writes and the check and loop files. "
             "override.cfg is not copied. "
@@ -1704,13 +1725,14 @@ def _write_files(root: Path, files: dict[str, bytes]) -> None:
 
 def _execute_test(step: dict, root: Path, godot: str) -> dict:
     """Run the packaged check. This process appends the one ledger row after wait()."""
-    parts = require_parts(step.get("goal") or "")
-    seconds = limit_seconds(step.get("goal") or "")
+    goal = step.get("goal") or ""
+    parts = require_parts(goal)
+    seconds = limit_seconds(goal)
     name = test_name(parts)
     # The nonce is not written into the project and is not an environment variable.
     # The check reads it from stdin before it adds the loop. A loop print cannot carry it.
     nonce = secrets.token_hex(32)
-    check_body = _check_script(parts, seconds).encode("utf-8")
+    check_body = _check_script(parts, seconds, goal).encode("utf-8")
     files = {
         "studio/check.gd": check_body,
         "studio/check.tscn": CHECK_TSCN.encode("utf-8"),
@@ -1721,7 +1743,8 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
     _write_files(root, files)
     # Godot 4.7 loads res://override.cfg from --path before the main scene. Count it
     # here and do not start that process. The verdict --path is a directory that
-    # contains only files this process just wrote.
+    # contains only files this process just wrote. A loop.gd that is not the exact
+    # bytes this process writes is not started either: a folded line would still run.
     declared = _declared_autoload(root)
     code = 1
     output = ""
@@ -1730,9 +1753,13 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
     try:
         if declared:
             output = f"unverified script: {declared}\n"
+        elif loop_script_foreign(root, goal):
+            output = "unverified script: res://studio/loop.gd\n"
         else:
             stage = _make_stage(directory)
-            _write_stage(stage, _stage_payload(root, check_body))
+            loop_path = root / "studio" / "loop.gd"
+            loop_bytes = _loop_script(goal).encode("utf-8") if loop_path.is_file() and not loop_path.is_symlink() else None
+            _write_stage(stage, _stage_payload(root, check_body, loop_bytes))
             if (stage / "override.cfg").exists():
                 output = "unverified script: res://override.cfg\n"
             else:
@@ -1765,7 +1792,7 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
     else:
         passed_line, bits = observed
     # A replaced loop.gd is not a pass, even when Godot was talked into exit 0.
-    if not is_package_loop(root) or foreign:
+    if not is_package_loop(root, goal) or foreign:
         passed_line = False
         bits = " ".join(f"{part}=false" for part in parts)
     if directory is None:
@@ -2222,8 +2249,6 @@ var required := PackedStringArray([__PARTS__])
 var test_name := "__TEST_NAME__"
 var expected_loop := "__LOOP_BODY_SHA256__"
 var expected_seconds := __EXPECTED_SECONDS__
-var written_loop := "__WRITTEN_LOOP__"
-var written_scene := "__WRITTEN_SCENE__"
 var package_scene := "__PACKAGE_SCENE__"
 var foreign := ""
 var _emit: Callable
@@ -2237,7 +2262,13 @@ func _ready() -> void:
         get_tree().quit(1)
         return
     _emit = _bind(secret, self)
-    if _loop_body_sha() != expected_loop:
+    if FileAccess.file_exists("res://studio/loop.gd") and _sha_file("res://studio/loop.gd") != expected_loop:
+        foreign = "res://studio/loop.gd"
+        print("unverified script: " + foreign)
+        if _emit.call("reject"):
+            _seal()
+        return
+    if _sha_file("res://studio/loop.gd") != expected_loop:
         if _emit.call("reject"):
             _seal()
         return
@@ -2274,24 +2305,10 @@ func _seal() -> void:
         get_tree().quit(1)
 
 func _sha_text(text: String) -> String:
-    var lines := text.split("\\n")
-    var out: PackedStringArray = []
-    for line in lines:
-        if line.begins_with("# goal:"):
-            out.append("# goal:")
-        elif line.begins_with("var limit_seconds :="):
-            out.append("var limit_seconds := 60.0")
-        else:
-            out.append(line)
     var ctx := HashingContext.new()
     ctx.start(HashingContext.HASH_SHA256)
-    ctx.update("\\n".join(out).to_utf8_buffer())
+    ctx.update(text.to_utf8_buffer())
     return ctx.finish().hex_encode().to_lower()
-
-func _loop_body_sha() -> String:
-    if not FileAccess.file_exists("res://studio/loop.gd"):
-        return ""
-    return _sha_text(FileAccess.get_file_as_string("res://studio/loop.gd"))
 
 func _packed_matches(packed: PackedScene) -> bool:
     if packed == null:
@@ -2312,7 +2329,8 @@ func _packed_matches(packed: PackedScene) -> bool:
     var source := str(script.source_code)
     if path != "res://studio/loop.gd":
         return false
-    return _sha_text(source) == expected_loop
+    # The file bytes are the script this process wrote. A folded line is not accepted.
+    return _sha_file(path) == expected_loop and (_sha_text(source) == expected_loop or _sha_file(path) == expected_loop)
 
 func _live_matches(node) -> bool:
     if node == null:
@@ -2342,17 +2360,15 @@ func _sha_file(path: String) -> String:
     return ctx.finish().hex_encode().to_lower()
 
 func _known_loop_script(path: String) -> bool:
-    if path != "res://studio/loop.gd" or written_loop == "":
+    if path != "res://studio/loop.gd" or expected_loop == "":
         return false
-    if _sha_file(path) != written_loop:
-        return false
-    return _sha_text(FileAccess.get_file_as_string(path)) == expected_loop
+    return _sha_file(path) == expected_loop
 
 func _known_loop_scene(path: String) -> bool:
-    if path != "res://studio/loop.tscn" or written_scene == "" or package_scene == "":
+    if path != "res://studio/loop.tscn" or package_scene == "":
         return false
     var digest := _sha_file(path)
-    return digest != "" and digest == written_scene and digest == package_scene
+    return digest != "" and digest == package_scene
 
 func _prefer(bad: PackedStringArray) -> String:
     if bad.is_empty():

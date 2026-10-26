@@ -656,6 +656,10 @@ class StudioTest(unittest.TestCase):
                 self.assertNotIn(secret, loop_text)
                 self.assertNotIn(secret, script)
             self.assertIn("Bearer ***", script)
+            clean = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(clean.get("isError"), _text(clean))
+            script = (root / "studio" / "loop.gd").read_text(encoding="utf-8")
+            self.assertEqual(script, studio._loop_script(GOAL))
 
             passed = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
             passed_text = _text(passed)
@@ -1206,13 +1210,30 @@ class StudioTest(unittest.TestCase):
         self.assertIn("GAME_EDITOR_PASS_LINE", studio.RECORD_GD)
         self.assertIn("test_axis", studio.RECORD_GD)
 
-    def test_package_loop_ignores_the_goal_line_only(self):
-        text = studio._loop_script("The key is picked. After 7, timeout_lose, then restart.")
+    def test_loop_script_must_match_every_line(self):
+        goal = "The key is picked. After 7, timeout_lose, then restart."
+        text = studio._loop_script(goal)
         self.assertIn("var limit_seconds := 7.0", text)
-        self.assertTrue(studio.is_package_loop_text(text))
-        self.assertFalse(studio.is_package_loop_text(text.replace("func _try_pickup", "func _try_pickup_gone", 1)))
+        self.assertTrue(studio.is_package_loop_text(text, goal))
+        self.assertFalse(studio.is_package_loop_text(text))
+        self.assertFalse(studio.is_package_loop_text(text.replace("func _try_pickup", "func _try_pickup_gone", 1), goal))
         swapped = text + "\nfunc _ready() -> void:\n    get_tree().quit(0)\n"
-        self.assertFalse(studio.is_package_loop_text(swapped))
+        self.assertFalse(studio.is_package_loop_text(swapped, goal))
+        called = text.replace(
+            "var limit_seconds := 7.0",
+            'var limit_seconds := (func() -> float: print("CHEAT_RAN"); return 7.0).call() as float',
+            1,
+        )
+        self.assertFalse(studio.is_package_loop_text(called, goal))
+        trailed = text.replace(
+            "var limit_seconds := 7.0",
+            'var limit_seconds := 7.0; print("CHEAT_RAN")',
+            1,
+        )
+        self.assertFalse(studio.is_package_loop_text(trailed, goal))
+        other = text.replace("# goal: ", "# goal: other ", 1)
+        self.assertNotEqual(other, text)
+        self.assertFalse(studio.is_package_loop_text(other, goal))
 
     def test_scene_hash_covers_the_script(self):
         tmp, root = _project()
@@ -1291,7 +1312,7 @@ class StudioTest(unittest.TestCase):
         try:
             studio_dir = root / "studio"
             studio_dir.mkdir()
-            (studio_dir / "loop.gd").write_text(studio.LOOP_GD, encoding="utf-8")
+            (studio_dir / "loop.gd").write_text(studio._loop_script(GOAL), encoding="utf-8")
             (studio_dir / "cheat.gd").write_text(_CHEAT_GD, encoding="utf-8")
             (studio_dir / "loop.tscn").write_text(_CHEAT_TSCN, encoding="utf-8")
             self.assertTrue(studio.is_package_loop(root))
@@ -1332,7 +1353,7 @@ class StudioTest(unittest.TestCase):
         try:
             studio_dir = root / "studio"
             studio_dir.mkdir()
-            (studio_dir / "loop.gd").write_text(studio.LOOP_GD, encoding="utf-8")
+            (studio_dir / "loop.gd").write_text(studio._loop_script(GOAL), encoding="utf-8")
             (studio_dir / "hurry.gd").write_text(_HURRY_GD, encoding="utf-8")
             scene = studio.LOOP_TSCN.replace("load_steps=6", "load_steps=7", 1)
             scene = scene.replace(
@@ -1592,6 +1613,63 @@ class StudioTest(unittest.TestCase):
             self.assertIn("exit=1", text)
             self.assertIn("exit_code=1", text)
             self.assertIsNotNone(studio.web_unserved(studio.ledger_dir()))
+        finally:
+            tmp.cleanup()
+
+    def test_limit_line_call_does_not_run_or_pass(self):
+        """A call on the limit line is not this script, even when the sha256 record matches the file."""
+        if studio.find_godot(None) is None:
+            self.skipTest("godot is not installed")
+        tmp, root = _project()
+        try:
+            loop = studio.execute({"tool": "studio", "op": "loop", "goal": GOAL}, str(root), None)
+            self.assertFalse(loop.get("isError"), _text(loop))
+            path = root / "studio" / "loop.gd"
+            official = path.read_text(encoding="utf-8")
+            directory = studio.ledger_dir()
+            record = directory / "written.json"
+            started: list = []
+            original = studio._run
+
+            def spy(cmd, timeout, extra=None, stdin=None, cwd=None):
+                if cmd and str(cmd[-1]).endswith("check.tscn"):
+                    started.append(list(cmd))
+                return original(cmd, timeout, extra, stdin, cwd)
+
+            variants = (
+                'var limit_seconds := (func() -> float: print("CHEAT_RAN"); return 60.0).call() as float',
+                'var limit_seconds := 60.0; print("CHEAT_RAN")',
+            )
+            for replacement in variants:
+                started.clear()
+                path.write_text(official.replace("var limit_seconds := 60.0", replacement, 1), encoding="utf-8")
+                data = json.loads(record.read_text(encoding="utf-8"))
+                data["res://studio/loop.gd"] = hashlib.sha256(path.read_bytes()).hexdigest()
+                record.write_text(json.dumps(data), encoding="utf-8")
+                self.assertFalse(studio.is_package_loop(root, GOAL))
+                studio._run = spy
+                try:
+                    result = studio.execute({"tool": "studio", "op": "test", "goal": GOAL}, str(root), None)
+                finally:
+                    studio._run = original
+                body = _text(result)
+                self.assertEqual(started, [], body)
+                self.assertTrue(result.get("isError"), body)
+                self.assertIn("unverified script: res://studio/loop.gd", body)
+                self.assertNotIn("CHEAT_RAN", body)
+                self.assertNotIn("physics_frames=", body)
+                self.assertNotIn("exit=0", body)
+                self.assertIn("exit_code=1", body)
+                self.assertIsNotNone(studio.web_unserved(directory))
+                check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
+                self.assertIn(studio.loop_body_sha256(GOAL), check_text)
+                self.assertNotIn("written_loop", check_text)
+                self.assertNotIn('begins_with("var limit_seconds', check_text)
+            web = studio.execute({"tool": "studio", "op": "web"}, str(root), None)
+            web_text = _text(web)
+            self.assertTrue(web.get("isError"), web_text)
+            self.assertIn("not served", web_text)
+            self.assertNotIn("url: http", web_text)
         finally:
             tmp.cleanup()
 
