@@ -3578,6 +3578,9 @@ class Bridge:
         # Godot AI call outside PLAN_UPSTREAM while a plan is being built.
         self._plans: dict[str, dict] = {}
         self._retired: dict[str, str] = {}   # plan_id -> "replaced" or "used"
+        # Test names whose latest run in this process was STUDIO_FAIL, until a loop for that name runs.
+        # A later plan_change of that same test saves no plan. The check, the ledger and plan_id match do not read this.
+        self._loop_owed: set[str] = set()
         self._plans_lock = threading.Lock()
         # scene -> what the last approved scene_do op compare found: {"sha", "diffs", "compared", "why", "at"}
         self.compare_snapshots: dict[str, dict] = {}
@@ -6525,6 +6528,56 @@ class Bridge:
                             f"named. Save a copy with scene_do op save_as instead. Nothing was sent to the Godot editor.")
         return ""
 
+    def _same_test_again(self, steps: list) -> str | None:
+        """When the last test in this process failed, another plan of that same test is not saved.
+
+        A different test name is planned as usual. The loop plan is planned as usual.
+        Matching is the part names this package scores, not a substring of the sentence.
+        """
+        owed = self._loop_owed
+        if not owed or not steps:
+            return None
+        names: list[str] = []
+        for step in steps:
+            if not isinstance(step, dict) or step.get("tool") != "studio" or step.get("op") != "test":
+                return None
+            try:
+                parts = studio.require_parts(step.get("goal") or "")
+            except studio.Refused:
+                return None
+            names.append(studio.test_name(parts))
+        if not names or any(name not in owed for name in names):
+            return None
+        return (
+            studio.next_after_fail(steps[0].get("goal") or "")
+            + " No plan was saved. Nothing was sent to the Godot editor."
+        )
+
+    def _note_studio_result(self, step: dict, result: dict) -> None:
+        """Remember a failed test until its loop runs. Does not write the ledger."""
+        if step.get("tool") != "studio":
+            return
+        chunks = [
+            block.get("text", "")
+            for block in (result.get("content") or [])
+            if isinstance(block, dict) and isinstance(block.get("text"), str)
+        ]
+        text = "\n".join(chunks)
+        try:
+            name = studio.test_name(studio.require_parts(step.get("goal") or ""))
+        except studio.Refused:
+            return
+        op = step.get("op")
+        if op == "loop" and not result.get("isError"):
+            self._loop_owed.discard(name)
+            return
+        if op != "test":
+            return
+        if "STUDIO_FAIL" in text:
+            self._loop_owed.add(name)
+        elif "STUDIO " in text:
+            self._loop_owed.discard(name)
+
     def _plan_change(self, arguments) -> dict:
         if not isinstance(arguments, dict) or set(arguments) - {"steps"}:
             return error_result("game-editor: plan_change takes steps only. Nothing was sent to the Godot editor.")
@@ -6535,6 +6588,9 @@ class Bridge:
                 f"game-editor: plan_change needs steps, a list of 1 to {MAX_PLAN_STEPS} objects such as "
                 f"{{\"tool\": \"scene_do\", \"op\": \"save\"}}. Nothing was sent to the Godot editor.")
         steps = json.loads(json.dumps(steps))
+        blocked = self._same_test_again(steps)
+        if blocked:
+            return error_result(blocked)
         studio_only = bool(steps) and all(
             isinstance(step, dict) and step.get("tool") == "studio" for step in steps)
         reason = self.ensure_child()
@@ -6793,6 +6849,9 @@ class Bridge:
                      "is needed.")
         lines.append(f"plan_id: {plan_id}")
         lines.append(f"fingerprint: {fingerprint}")
+        if studio_only:
+            # One field. The id is the whole token after plan_id=. A shorter copy is still refused.
+            lines.append(f"next: apply_plan plan_id={plan_id}")
         body = escape_controls("\n".join(lines))
         if len(body.encode("utf-8")) > MAX_RESULT_BYTES:
             return error_result(
@@ -6965,6 +7024,12 @@ class Bridge:
                     f"game-editor: apply_plan did not run this plan: what it would drop or delete takes {len(summary)} "
                     f"characters to list, more than the {CONFIRM_LIMIT} the second approval shows whole. Nothing was "
                     f"changed. Split the change, or save without overwrite after asking the user what to keep.")
+            studio_plan = bool(plan.get("steps")) and all(
+                isinstance(step, dict) and step.get("tool") == "studio" for step in plan["steps"])
+            if studio_plan:
+                extra = f"\nnext: confirm_risky_plan plan_id={plan_id}"
+                if len(summary) + len(extra) <= CONFIRM_LIMIT:
+                    summary += extra
             now = self._fingerprint(plan["steps"], root, plan.get("planned_diffs"))
             confirm = {"text": summary, "fingerprint": now, "diffs": apply_diffs, "at": time.time(),
                        "baseline_done": baseline_done}
@@ -7513,6 +7578,7 @@ class Bridge:
                 content.append({"type": "text", "text": self._beside_note(kept)})
                 result["content"] = content
             results.append(result)
+            self._note_studio_result(step, result)
             if result.get("isError"):
                 break
             if stopped_here:

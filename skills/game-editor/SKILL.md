@@ -110,7 +110,7 @@ Quote the first line of the reply. Do not describe values the tools did not retu
 - `Cannot delete the scene root` → delete a child, not the root.
 - `NEW_CLIENT_SESSION_REQUIRED` → a different Godot AI backend is already running. Close that backend, then try once. Nothing was sent.
 - `export_templates_missing` → `ship_build` did not download templates and wrote nothing. Install that version's export templates in the editor, or use `studio` op `web`, which downloads only the pinned Godot 4.7.2 template after sha256 and sha512 match.
-- `STUDIO_FAIL` → quote the string. Plan `studio` op `loop`, then plan `studio` op `test` again. Do not put both in one plan. Do not say the test passed until a trusted exit 0 is the latest row for that test.
+- `STUDIO_FAIL` → quote the string. The reply has one `next` field. Plan that loop step (kind `loop`). Do not plan the same test again until that loop plan has run. Copy `plan_id=` from the `next` field into `apply_plan` and `confirm_risky_plan`. A shorter plan_id is refused. Do not put the test and the loop in one plan. Do not say the test passed until a trusted exit 0 is the latest row for that test.
 - `This sentence cannot be a test.` → the sentence named none of the parts. Do not rewrite it into a loop.
 - `refused to save` → the editor and the file already differed. Apply `scene_do` op `compare`, then plan the save. Nothing was written.
 - `overwrite keeps the editor` → the save kept the editor copy. Read the reply's list before another save.

@@ -1184,6 +1184,11 @@ class StudioTest(unittest.TestCase):
                 text)
             self.assertNotIn("sound=true", text)
             self.assertIn("exit_code=1", text)
+            self.assertIn("next: Plan the loop first.", text)
+            self.assertIn('"op":"loop"', text)
+            self.assertIn("kind loop", text)
+            self.assertIn("32 hex characters", text)
+            self.assertNotRegex(text, r"plan_id=[0-9a-f]{32}")
             self.assertNotRegex(text, r"[0-9a-f]{64}")
             check_text = (root / "studio" / "check.gd").read_text(encoding="utf-8")
             self.assertIn("read_string_from_stdin", check_text)
@@ -1194,7 +1199,61 @@ class StudioTest(unittest.TestCase):
             directory = studio.ledger_dir()
             rows = studio.read_trusted(directory)
             self.assertEqual(rows[-1]["exit_code"], 1)
+            self.assertNotIn("next", rows[-1])
         finally:
+            tmp.cleanup()
+
+    def test_same_test_again_says_plan_the_loop_first(self):
+        """A repeated test plan is not saved. The loop plan's next field is the whole plan_id."""
+        bridge_tests = _load("test_bridge_for_next", ROOT / "tests" / "test_bridge.py")
+        # Loading the bridge tests clears HERMES_HOME. Put it back before any studio write.
+        os.environ["HERMES_HOME"] = self._home.name
+        tmp, root = _project()
+        fake = bridge_tests.FakeChild(project=root, scene="")
+        try:
+            name = studio.test_name(studio.require_parts(GOAL))
+            fake.bridge._loop_owed.add(name)
+            step = {"tool": "studio", "op": "test", "goal": GOAL}
+            again = fake.bridge.call("plan_change", {"steps": [step]})
+            text = _text(again)
+            self.assertTrue(again.get("isError"), text)
+            self.assertIn("Plan the loop first", text)
+            self.assertIn('"op":"loop"', text)
+            self.assertNotIn("plan_id:", text)
+            self.assertEqual(fake.bridge._plans, {})
+            other = fake.bridge.call("plan_change", {"steps": [
+                {"tool": "studio", "op": "test", "goal": "The coin fell."}]})
+            self.assertFalse(other.get("isError"), _text(other))
+            self.assertIn("plan_id:", _text(other))
+            loop = fake.bridge.call("plan_change", {"steps": [
+                {"tool": "studio", "op": "loop", "goal": GOAL}]})
+            loop_text = _text(loop)
+            self.assertFalse(loop.get("isError"), loop_text)
+            plan_id = bridge_tests._plan_id_of(loop)
+            self.assertEqual(len(plan_id), 32)
+            self.assertRegex(plan_id, r"^[0-9a-f]{32}$")
+            self.assertIn(f"next: apply_plan plan_id={plan_id}", loop_text)
+            self.assertNotIn(plan_id[:-1] + "\n", loop_text)
+            short = fake.bridge.call("apply_plan", {"plan_id": plan_id[:-1]})
+            self.assertIn("does not know this plan_id", _text(short))
+            prefix = fake.bridge.call("confirm_risky_plan", {"plan_id": plan_id[:31]})
+            self.assertIn("does not know this plan_id", _text(prefix))
+            self.assertIn(plan_id, fake.bridge._plans)
+            applied = fake.bridge.call("apply_plan", {"plan_id": plan_id})
+            applied_text = _text(applied)
+            self.assertFalse(applied.get("isError"), applied_text)
+            if "needs a second approval" in applied_text:
+                self.assertIn(f"next: confirm_risky_plan plan_id={plan_id}", applied_text)
+                bad = fake.bridge.call("confirm_risky_plan", {"plan_id": plan_id[:-1]})
+                self.assertIn("does not know this plan_id", _text(bad))
+                done = fake.bridge.call("confirm_risky_plan", {"plan_id": plan_id})
+                self.assertFalse(done.get("isError"), _text(done))
+            self.assertNotIn(name, fake.bridge._loop_owed)
+            retest = fake.bridge.call("plan_change", {"steps": [step]})
+            self.assertFalse(retest.get("isError"), _text(retest))
+            self.assertIn("plan_id:", _text(retest))
+        finally:
+            fake.close()
             tmp.cleanup()
 
     def test_loop_quit_zero_is_not_a_pass(self):

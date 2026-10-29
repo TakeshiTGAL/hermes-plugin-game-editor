@@ -168,6 +168,21 @@ def test_name(parts: tuple[str, ...]) -> str:
     return "+".join(parts)
 
 
+def next_after_fail(goal: str) -> str:
+    """One English field. The loop plan does not exist yet, so this names its shape.
+
+    The plan_id is 32 hex characters on a later plan. A shorter id is not accepted.
+    """
+    sentence = _one_line(goal, 180)
+    step = json.dumps({"tool": "studio", "op": "loop", "goal": sentence}, separators=(",", ":"))
+    return (
+        "next: Plan the loop first. One plan_change step, kind loop: "
+        + step
+        + ". Copy plan_id= from that plan's next field. It is 32 hex characters. "
+        "A shorter plan_id is refused."
+    )
+
+
 def _profile_home() -> Path:
     home = os.environ.get("HERMES_HOME", "").strip()
     if home:
@@ -1834,6 +1849,7 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME and HOME are unset\nplan_digest: {plan_digest(step)}"
         if foreign:
             reply = foreign + "\n" + reply
+        reply += "\n" + next_after_fail(goal)
         return _err(reply)
     tampered = _ledger_text(directory) != before_ledger
     passed = (
@@ -1872,6 +1888,7 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         reply = foreign + "\n" + reply
     if frames:
         reply += "\n" + frames
+    reply += "\n" + next_after_fail(goal)
     return _err(reply)
 
 

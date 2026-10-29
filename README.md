@@ -119,7 +119,7 @@ Start `hermes chat --cli -s agent-plugin-game-editor-ba281cc7:game-editor --max-
 Call plan_change with one studio test step for this sentence: The key is picked and a sound plays and the door opens. After 60, timeout_lose, then restart. If a tool is not in your list, find it with tool_search and call it through tool_call by the exact name returned, such as mcp__game_editor__apply_plan. After the plan is returned, call apply_plan with that plan_id. When apply_plan says it needs a second approval, call confirm_risky_plan with that plan_id. Wait for that result. After STUDIO_FAIL, call plan_change with one studio loop step for the same sentence, then apply_plan, then confirm_risky_plan. After that plan runs, call plan_change with one studio test step again, then apply_plan, then confirm_risky_plan.
 ```
 
-When the Dangerous Command panel shows `apply_plan` or `confirm_risky_plan`, the highlight is on `1. Allow once`. Press 1. That selects Allow once and confirms it. Do not press Enter first. The first applied test prints `STUDIO_FAIL` and a non-zero exit. The loop plan writes the scene. The next applied test prints `STUDIO` and exit 0. A later `studio` op `web` plan serves on 127.0.0.1 only after that trusted exit 0. When the Godot editor has no open project, those files go under plugin-data/game-editor/studio-project. The ledger is the same plugin-data folder (`HOME/.hermes` when `HERMES_HOME` is unset).
+When the Dangerous Command panel shows `apply_plan` or `confirm_risky_plan`, the highlight is on `1. Allow once`. Press 1. That selects Allow once and confirms it. Do not press Enter first. The first applied test prints `STUDIO_FAIL` and a non-zero exit. The loop plan writes the scene. On this machine, five runs of the query above with Qwen3-1.7B (sha256 `061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a`) reached a ledger exit 0 on 5 of 5 runs. That count is these five runs, not a promise that the next run passes. A run that stops after `STUDIO_FAIL` has not passed. Type `continue with the loop plan` and press Enter. The later test prints `STUDIO` and exit 0 only when its ledger row is exit 0. A later `studio` op `web` plan serves on 127.0.0.1 only after that trusted exit 0. When the Godot editor has no open project, those files go under plugin-data/game-editor/studio-project. The ledger is the same plugin-data folder (`HOME/.hermes` when `HERMES_HOME` is unset).
 
 ## Requirements
 
@@ -310,8 +310,8 @@ On 2026-10-21 on macOS with Godot 4.7.2 (headless editor, `GODOT_AI_ALLOW_HEADLE
 
 | Pinned export template in cache | `python3 -m pytest -q` |
 | --- | --- |
-| present (`<HERMES_HOME>/plugin-data/game-editor/export-templates` or `/tmp/game-editor-export-templates`) | 227 passed, 3 skipped |
-| absent (`test_web_export_serves_loopback_only` skips with `pinned export template is not in the cache`) | 226 passed, 4 skipped |
+| present (`<HERMES_HOME>/plugin-data/game-editor/export-templates` or `/tmp/game-editor-export-templates`) | 228 passed, 3 skipped |
+| absent (`test_web_export_serves_loopback_only` skips with `pinned export template is not in the cache`) | 227 passed, 4 skipped |
 
 `tools/extract_effects.py --upstream <godot-ai v4.3.0 checkout>` regenerates `bridge/effects.json`, and `--check` says whether it would change.
 
