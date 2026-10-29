@@ -25,9 +25,11 @@ hermes plugins enable game-editor
 
 For a local copy, give the folder as a `file://` URL: `hermes plugins install file:///path/to/hermes-plugin-game-editor`. A `file://` URL of a git repository clones that repository's HEAD commit. `pyproject.toml` declares `mcp>=2.0.0,<3`; enabling the plugin installs it. Open a new session so the tools load. A headless Godot editor disables the Godot AI add-on unless `GODOT_AI_ALLOW_HEADLESS=1` is set before the editor opens.
 
-Hermes v0.22.2 registers this portable skill as `agent-plugin-game-editor-ba281cc7:game-editor`. That name is `agent-plugin-` plus the plugin.json `name` plus eight hex digits of sha256 of that name, then `:game-editor`. `hermes chat -s game-editor` is unknown. The eight tools stay deferred. The model finds them with `tool_search` and calls them through `tool_call`. Do not pass `-t`. Cron, `-q` on a non-TTY, `--oneshot` and `-Q` decline `apply_plan`.
+Hermes v0.22.2 registers this portable skill as `agent-plugin-game-editor-ba281cc7:game-editor`. That name is `agent-plugin-` plus the plugin.json `name` plus eight hex digits of sha256 of that name, then `:game-editor`. `hermes chat -s game-editor` is unknown. At start Hermes may print `Warning: Unknown toolsets: game-editor`. The eight MCP tools still register after that line. The eight tools stay deferred. The model finds them with `tool_search` and calls them through `tool_call`. Do not pass `-t`. Cron, `-q` on a non-TTY, `--oneshot` and `-Q` decline `apply_plan`.
 
-## Thirty seconds
+## First run
+
+The scene below is short to read and slow on a small local model. On this machine each run with Qwen3-1.7B on the CPU took 12 to 21 minutes (720 to 1212 seconds) from the query to the passing ledger row. A larger model is faster.
 
 Use an empty profile. Unset `HERMES_HOME` and set `HOME` to an empty user directory so Hermes uses `$HOME/.hermes`. The server listens on loopback only. The child environment for the server is `PATH`, `HOME`, `TMPDIR`, and `LANG`. Do not pass the rest of the process environment.
 
