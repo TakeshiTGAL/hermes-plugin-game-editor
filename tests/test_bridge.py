@@ -138,7 +138,8 @@ def _testing_init(self, *args, **kwargs):
 
 B.Bridge.__init__ = _testing_init
 
-# This plugin does not read HERMES_HOME. A shell value must not change a test.
+# Isolate tests from the developer's profile. Studio reads HERMES_HOME; a test
+# that needs a profile sets it after this import.
 os.environ.pop("HERMES_HOME", None)
 
 LEVEL = """[gd_scene load_steps=3 format=3]

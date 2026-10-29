@@ -168,27 +168,59 @@ def test_name(parts: tuple[str, ...]) -> str:
     return "+".join(parts)
 
 
+def _profile_home() -> Path:
+    home = os.environ.get("HERMES_HOME", "").strip()
+    if home:
+        return Path(home)
+    user = os.environ.get("HOME", "").strip()
+    if not user:
+        raise Refused("game-editor: studio needs HERMES_HOME or HOME for the studio project.")
+    return Path(user) / ".hermes"
+
+
 def cache_dir() -> Path:
     """Pinned export templates live in plugin-data, not a fixed temporary directory."""
     if CACHE_DIR is not None:
         return CACHE_DIR
-    home = os.environ.get("HERMES_HOME", "").strip()
-    if not home:
-        raise Refused("game-editor: HERMES_HOME is unset, so the export template was not cached.")
-    path = Path(home) / "plugin-data" / "game-editor" / "export-templates"
+    path = _profile_home() / "plugin-data" / "game-editor" / "export-templates"
     if path.is_symlink():
         raise Refused("game-editor: studio refused a symlink template cache.")
     return path
 
 
 def ledger_dir() -> Path | None:
-    home = os.environ.get("HERMES_HOME", "").strip()
-    if not home:
+    """Ledger rows live in plugin-data. HERMES_HOME wins; otherwise HOME/.hermes."""
+    try:
+        home = _profile_home()
+    except Refused:
         return None
-    path = Path(home) / "plugin-data" / "game-editor"
+    path = home / "plugin-data" / "game-editor"
     if path.is_symlink():
         raise Refused("game-editor: studio refused a symlink ledger directory.")
     return path
+
+
+def workspace_root() -> str:
+    """Project folder used when the Godot editor has no open session.
+
+    Headless studio writes the loop and the check here. It is under plugin-data,
+    not a guessed path and not the caller's cwd.
+    """
+    path = _profile_home() / "plugin-data" / "game-editor" / "studio-project"
+    if path.exists() and path.is_symlink():
+        raise Refused("game-editor: studio refused a symlink project folder.")
+    path.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise Refused("game-editor: studio refused a symlink project folder.")
+    godot = path / "project.godot"
+    if godot.is_symlink():
+        raise Refused("game-editor: studio refused a symlink project.godot.")
+    if not godot.is_file():
+        godot.write_text(
+            'config_version=5\n\n[application]\nconfig/name="studio"\n',
+            encoding="utf-8",
+        )
+    return str(path.resolve())
 
 
 def _ledger_path(directory: Path) -> Path:
@@ -643,7 +675,7 @@ def _root_path(root: str) -> Path:
     which refuses a symlink inside the project.
     """
     if not isinstance(root, str) or not root:
-        raise Refused("game-editor: studio needs the open project's folder.")
+        return Path(workspace_root())
     path = Path(root)
     if path.is_symlink():
         raise Refused("game-editor: studio refused a symlink project folder.")
@@ -1575,9 +1607,11 @@ def plan_block(step: dict, index: int, root: str) -> tuple[str, list[str]]:
             "A child script, an inherited scene, an autoload in project.godot or override.cfg, "
             "or any other resource this package did not write "
             "fails as unverified script: and the path. "
-            "Godot is not started when that autoload is declared. "
-            "A loop.gd whose bytes are not the script this process writes for that sentence "
-            "is unverified script: res://studio/loop.gd and Godot is not started. "
+            "Godot is not started when that autoload is declared, or when loop.gd bytes "
+            "are not the script this process writes for that sentence "
+            "(unverified script: res://studio/loop.gd). "
+            "When the extra script is an embedded GDScript on the scene, the inspection "
+            "process starts and that extra script does not run. "
             "The sha256 record is not the allow-list. "
             "Otherwise Godot is started with --path on a directory this process creates. "
             "That directory gets a project.godot this process writes and the check and loop files. "
@@ -1797,7 +1831,7 @@ def _execute_test(step: dict, root: Path, godot: str) -> dict:
         bits = " ".join(f"{part}=false" for part in parts)
     if directory is None:
         shown = ("STUDIO " if passed_line else "STUDIO_FAIL ") + bits
-        reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME is unset\nplan_digest: {plan_digest(step)}"
+        reply = f"{shown}\nexit={code if code else 1}\nledger: HERMES_HOME and HOME are unset\nplan_digest: {plan_digest(step)}"
         if foreign:
             reply = foreign + "\n" + reply
         return _err(reply)

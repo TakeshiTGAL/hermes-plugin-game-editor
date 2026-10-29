@@ -6535,10 +6535,20 @@ class Bridge:
                 f"game-editor: plan_change needs steps, a list of 1 to {MAX_PLAN_STEPS} objects such as "
                 f"{{\"tool\": \"scene_do\", \"op\": \"save\"}}. Nothing was sent to the Godot editor.")
         steps = json.loads(json.dumps(steps))
+        studio_only = bool(steps) and all(
+            isinstance(step, dict) and step.get("tool") == "studio" for step in steps)
         reason = self.ensure_child()
-        if reason:
+        if reason and not studio_only:
             return error_result(reason)
-        root, problem = self.project_root()
+        root, problem = (None, "")
+        if not reason:
+            root, problem = self.project_root()
+        if (not root or problem) and studio_only:
+            try:
+                root = studio.workspace_root()
+            except studio.Refused as exc:
+                return error_result(f"{exc} No plan was saved.")
+            problem = ""
         if problem:
             return error_result(
                 "game-editor: plan_change could not confirm the project folder, so no plan was saved. "
@@ -6983,7 +6993,12 @@ class Bridge:
                 "Nothing was sent to the Godot editor.")
         self.progress("checking the plan against the editor", 0, len(plan["steps"]) + 1)
         confirm = plan["confirm"]
-        root, problem_text = self.project_root()
+        studio_only = bool(plan.get("steps")) and all(
+            isinstance(step, dict) and step.get("tool") == "studio" for step in plan["steps"])
+        if studio_only and isinstance(plan.get("root"), str) and plan["root"]:
+            root, problem_text = plan["root"], ""
+        else:
+            root, problem_text = self.project_root()
         if problem_text or root != plan["root"]:
             self._retire(plan_id, "used")
             return error_result("game-editor: confirm_risky_plan could not confirm the project folder, so the plan "
@@ -7033,6 +7048,23 @@ class Bridge:
 
     def _check_unchanged(self, plan: dict) -> tuple[str | None, str]:
         """(root, "") when nothing the plan was made against changed, else (root, why it does not run)."""
+        studio_only = bool(plan.get("steps")) and all(
+            isinstance(step, dict) and step.get("tool") == "studio" for step in plan["steps"])
+        if studio_only and isinstance(plan.get("root"), str) and plan["root"]:
+            root = plan["root"]
+            try:
+                self._local.planning = True
+                now = self._fingerprint(plan["steps"], root, plan.get("planned_diffs"))
+            except Refused as exc:
+                return root, str(exc)
+            finally:
+                self._local.planning = False
+            if now != plan["fingerprint"]:
+                return root, ("game-editor: the project changed after this plan (the open scene, the scene tree, a file "
+                              "it names, a file a step changes as a side effect or an export neighbor), so apply_plan did "
+                              "not run it. Call plan_change again and show the new plan. Nothing was sent to the Godot "
+                              "editor.")
+            return root, ""
         reason = self.ensure_child()
         if reason:
             return None, reason

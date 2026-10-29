@@ -419,6 +419,36 @@ class StudioTest(unittest.TestCase):
         self.assertIn("xoxb-***", hidden)
         self.assertIn('"***"', hidden)
 
+    def test_workspace_root_when_editor_has_no_project(self):
+        path = Path(studio.workspace_root())
+        self.assertTrue((path / "project.godot").is_file())
+        self.assertEqual(path.parent.name, "game-editor")
+        block, losses = studio.plan_block(
+            {"tool": "studio", "op": "test", "goal": GOAL}, 1, "")
+        self.assertIn("studio op test", block)
+        self.assertTrue(any("godot --headless" in line for line in losses))
+
+    def test_ledger_when_hermes_home_unset_uses_home_dot_hermes(self):
+        saved = os.environ.pop("HERMES_HOME")
+        saved_home = os.environ.get("HOME")
+        fake = tempfile.TemporaryDirectory()
+        try:
+            os.environ["HOME"] = fake.name
+            directory = studio.ledger_dir()
+            self.assertEqual(
+                directory,
+                Path(fake.name) / ".hermes" / "plugin-data" / "game-editor",
+            )
+            os.environ.pop("HOME", None)
+            self.assertIsNone(studio.ledger_dir())
+        finally:
+            os.environ["HERMES_HOME"] = saved
+            if saved_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = saved_home
+            fake.cleanup()
+
     def test_seconds_and_meters(self):
         self.assertEqual(studio.limit_seconds(GOAL), 60)
         self.assertEqual(studio.limit_seconds("leave in 45 seconds"), 45)
@@ -756,11 +786,25 @@ class StudioTest(unittest.TestCase):
         source = (ROOT / "bridge" / "studio.py").read_text(encoding="utf-8")
         self.assertNotIn("/tmp/game-editor-export-templates", source)
         saved = os.environ.pop("HERMES_HOME")
+        saved_home = os.environ.get("HOME")
+        fake = tempfile.TemporaryDirectory()
         try:
+            os.environ["HOME"] = fake.name
+            path = studio.cache_dir()
+            self.assertEqual(
+                path,
+                Path(fake.name) / ".hermes" / "plugin-data" / "game-editor" / "export-templates",
+            )
+            os.environ.pop("HOME", None)
             with self.assertRaises(studio.Refused):
                 studio.cache_dir()
         finally:
             os.environ["HERMES_HOME"] = saved
+            if saved_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = saved_home
+            fake.cleanup()
 
     def test_web_stops_the_previous_listener_first(self):
         class Dummy:
@@ -997,6 +1041,7 @@ class StudioTest(unittest.TestCase):
         if studio.find_godot(None) is None:
             self.skipTest("godot is not installed")
         bridge_tests = _load("test_bridge_for_studio", ROOT / "tests" / "test_bridge.py")
+        os.environ["HERMES_HOME"] = self._home.name
         tmp, root = _project()
         fake = bridge_tests.FakeChild(project=root, scene="")
         try:

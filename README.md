@@ -2,7 +2,7 @@
 
 ## What is unique
 
-Meshy shows a downloaded model in a Desktop card and can send a short preview video in a messenger. GameForge builds a project, and its author played that build and found crashes. Rosebud and itch.io each give one link that starts the game. Genie is playable as soon as the world exists. This plugin adds a pass that is the Godot process exit code. A sentence is scored only when it names `fell`, `sound`, `picked`, `door`, `timeout_lose` or `restart` as a whole word. `paint the floor`, a count of seconds, `collect` and `try again` are not those names. A test that has failed stays failed until this bridge appends a later exit 0 after it waits on that Godot process. A row that shows up in the ledger file without that wait is not a pass. A loop that prints STUDIO and quits 0 is not a pass. A loop script that sets its own flags, or is not the script this package writes, is not a pass. Its bytes have to be the bytes this process writes for that sentence. Any other text on the `var limit_seconds :=` line is `unverified script: res://studio/loop.gd`. Godot is not started. The sha256 record under plugin-data is not the allow-list. The scene's running root has to be that res://studio/loop.gd. Keeping the file and attaching another script is not a pass, including a child script, an inherited scene, an autoload in project.godot or override.cfg, or any other resource this package did not write. The check reports unverified script: and that path. Godot is not started when that autoload is declared. The verdict uses --path on a directory this process creates, and that directory does not contain override.cfg. The check watches the key become a child of the player. timeout_lose is not a Limit signal and not a compressed wait. Godot runs with --fixed-fps 60. timeout_lose is the fresh round's physics frames, the sentence's seconds times 60, so 60 seconds is 3600 frames, while Engine.time_scale stays 1 and the physics tick rate stays 60. The Limit timeout signal is not a pass. If Limit stops before those frames, the exit code is not 0. restart is true only after those frames, when the key is back on the floor, the door collision is back, and the player is back at the start position with velocity near zero. The scene hash covers the scene and the script. The Web export is not served until a trusted exit 0 is the latest row for a test, including when the ledger has no row. It takes a GLB or an audio file another plugin already wrote, fixes scale, pivot and collision, and appends one CREDITS line. The same pass and fail lines are the ones a Unity editor can print later (`docs/VERDICT.md`). Hermes itself is not modified. This package does not register `pre_verify`: Hermes does not load Python from a portable plugin, and a native manifest would drop the eight MCP tools. `pre_verify` only nudges after Hermes itself recorded a `write_file` or `patch`, at most `agent.max_verify_nudges` times (the default is 3). A studio write does not record those paths, so the hook cannot hold a turn open until an exit code is 0. The gate in this package is the tool result: `web` is not served until a trusted exit 0 is the latest row for a test. Hermes can still accept a final answer when the model never calls a tool.
+Meshy shows a downloaded model in a Desktop card and can send a short preview video in a messenger. GameForge builds a project, and its author played that build and found crashes. Rosebud and itch.io each give one link that starts the game. Genie is playable as soon as the world exists. This plugin adds a pass that is the Godot process exit code. A sentence is scored only when it names `fell`, `sound`, `picked`, `door`, `timeout_lose` or `restart` as a whole word. `paint the floor`, a count of seconds, `collect` and `try again` are not those names. A test that has failed stays failed until this bridge appends a later exit 0 after it waits on that Godot process. A row that shows up in the ledger file without that wait is not a pass. A loop that prints STUDIO and quits 0 is not a pass. A loop script that sets its own flags, or is not the script this package writes, is not a pass. Its bytes have to be the bytes this process writes for that sentence. Any other text on the `var limit_seconds :=` line is `unverified script: res://studio/loop.gd`. Godot is not started for that byte-different loop.gd, and it is not started when an autoload is declared. The sha256 record under plugin-data is not the allow-list. The scene's running root has to be that res://studio/loop.gd. Keeping the file and attaching another script is not a pass, including a child script, an inherited scene, an autoload in project.godot or override.cfg, or any other resource this package did not write. The check reports unverified script: and that path. When that extra script is an embedded GDScript on the scene, the inspection process starts and the extra script does not run. The verdict uses --path on a directory this process creates, and that directory does not contain override.cfg. The check watches the key become a child of the player. timeout_lose is not a Limit signal and not a compressed wait. Godot runs with --fixed-fps 60. timeout_lose is the fresh round's physics frames, the sentence's seconds times 60, so 60 seconds is 3600 frames, while Engine.time_scale stays 1 and the physics tick rate stays 60. The Limit timeout signal is not a pass. If Limit stops before those frames, the exit code is not 0. restart is true only after those frames, when the key is back on the floor, the door collision is back, and the player is back at the start position with velocity near zero. The scene hash covers the scene and the script. The Web export is not served until a trusted exit 0 is the latest row for a test, including when the ledger has no row. It takes a GLB or an audio file another plugin already wrote, fixes scale, pivot and collision, and appends one CREDITS line. The same pass and fail lines are the ones a Unity editor can print later (`docs/VERDICT.md`). Hermes itself is not modified. This package does not register `pre_verify`: Hermes does not load Python from a portable plugin, and a native manifest would drop the eight MCP tools. `pre_verify` only nudges after Hermes itself recorded a `write_file` or `patch`, at most `agent.max_verify_nudges` times (the default is 3). A studio write does not record those paths, so the hook cannot hold a turn open until an exit code is 0. The gate in this package is the tool result: `web` is not served until a trusted exit 0 is the latest row for a test. Hermes can still accept a final answer when the model never calls a tool.
 
 agent-station, advisor, hermes-memory-pane, llmslim and model-leaderboard replay Desktop edits, advise from a second model, edit memory, compress old tool output, or rank models. None of them scores a sentence with a headless Godot exit code.
 
@@ -24,6 +24,102 @@ hermes plugins enable game-editor
 ```
 
 For a local copy, give the folder as a `file://` URL: `hermes plugins install file:///path/to/hermes-plugin-game-editor`. A `file://` URL of a git repository clones that repository's HEAD commit. `pyproject.toml` declares `mcp>=2.0.0,<3`; enabling the plugin installs it. Open a new session so the tools load. A headless Godot editor disables the Godot AI add-on unless `GODOT_AI_ALLOW_HEADLESS=1` is set before the editor opens.
+
+Hermes v0.22.2 registers this portable skill as `agent-plugin-game-editor-ba281cc7:game-editor`. That name is `agent-plugin-` plus the plugin.json `name` plus eight hex digits of sha256 of that name, then `:game-editor`. `hermes chat -s game-editor` is unknown. The eight tools stay deferred. The model finds them with `tool_search` and calls them through `tool_call`. Do not pass `-t`. Cron, `-q` on a non-TTY, `--oneshot` and `-Q` decline `apply_plan`.
+
+## Thirty seconds
+
+Use an empty profile. Unset `HERMES_HOME` and set `HOME` to an empty user directory so Hermes uses `$HOME/.hermes`. The server listens on loopback only. The child environment for the server is `PATH`, `HOME`, `TMPDIR`, and `LANG`. Do not pass the rest of the process environment.
+
+The plugin does not download the model or start the server. Before the scene, check the files yourself. If a hash differs, do not use that file.
+
+| File | Identity | sha256 |
+| --- | --- | --- |
+| llama.cpp archive `llama-b11669-bin-macos-arm64.tar.gz` | 0.7.0-dev build 11669, commit 620d2225cc436ab0b001e3200e590e3b286ef9ab | dbed55493d72bc1ba2babc8770d669c2289b5bc4ee9fb2a4dfc158d45b7d13fd |
+| `Qwen3-1.7B-Q8_0.gguf` from `https://huggingface.co/Qwen/Qwen3-1.7B-GGUF` | 1834426016 bytes | 061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a |
+
+`llama-server --version` prints `0.7.0-dev (build 11669, commit 620d2225c)`.
+
+```sh
+export HOME="$(mktemp -d)/user"
+mkdir -p "$HOME"
+unset HERMES_HOME
+export HERMES_INTERACTIVE=1
+shasum -a 256 /path/to/Qwen3-1.7B-Q8_0.gguf
+shasum -a 256 /path/to/llama-b11669-bin-macos-arm64.tar.gz
+env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-C.UTF-8}" \
+  /path/to/llama-server \
+  -m /path/to/Qwen3-1.7B-Q8_0.gguf \
+  --host 127.0.0.1 --port 9931 --jinja \
+  --device none --fit off -ngl 0 --reasoning off -c 64000
+```
+
+This build caps the slot at the model's training context even when `-c` is higher. Hermes still refuses a local endpoint whose configured window is below 64000, so the home config sets `context_length` to 64000. Startup then logs one warning: the pin wins over the provider's advertised window. Set `model.default` to the id `GET /v1/models` returns. Point `base_url` at `http://127.0.0.1:9931/v1`. The two values must match, or Hermes drops the context override and stops.
+
+Install this directory into that empty home with `hermes plugins install --yes-deps --enable file:///path/to/hermes-plugin-game-editor`. The scan does not need `--force`. Write the config after install. Do not run `hermes setup` on this home.
+
+Write this `config.yaml` in `$HOME/.hermes`. `_config_version` 50 is the stamp in the Hermes tree this scene starts. A file with no stamp is read as version 0. That is below the support floor of 12, so Hermes logs that the config predates version 12 and names `hermes setup`. `hermes setup` rewrites `config.yaml` and can drop the model pin and the plugin list. With this stamp, startup leaves the file in place. If the Hermes you start publishes a different integer, write that integer instead.
+
+```yaml
+_config_version: 50
+model:
+  default: <id from GET /v1/models>
+  provider: custom
+  base_url: http://127.0.0.1:9931/v1
+  context_length: 64000
+plugins:
+  enabled:
+    - game-editor
+approvals:
+  mode: manual
+agent:
+  coding_context: off
+  stall_guards: false
+  task_completion_guidance: false
+  parallel_tool_call_guidance: false
+  environment_probe: false
+  bot_mode_protocol: false
+  tool_use_enforcement: false
+  execution_guidance: false
+  disabled_toolsets:
+    - terminal
+    - web
+    - browser
+    - image_gen
+    - vision
+    - file
+platform_hints:
+  cli:
+    replace: "Write plain text."
+tools:
+  tool_search:
+    enabled: on
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
+    offer_version: 2
+auxiliary:
+  title_generation:
+    enabled: false
+  free_only: true
+compression:
+  enabled: false
+```
+
+Write this `SOUL.md` in the same home. A small model copies the mid-turn steering example instead of calling a tool when this file is longer.
+
+```markdown
+You are a local assistant. Use the tool-call channel, not prose, when a tool can do the job.
+```
+
+Start `hermes chat --cli -s agent-plugin-game-editor-ba281cc7:game-editor --max-turns 40` with `HOME` set to that user and `HERMES_HOME` unset. `--cli` is the classic numbered menu. Do not pass `-t`. Do not pass `-q` on a non-TTY, `--oneshot`, or `-Q`: those decline `apply_plan`. Godot 4.7 or later must be on `PATH` as `godot`. Paste this query and press Enter. Do not change a character of it.
+
+```
+Call plan_change with one studio test step for this sentence: The key is picked and a sound plays and the door opens. After 60, timeout_lose, then restart. If a tool is not in your list, find it with tool_search and call it through tool_call by the exact name returned, such as mcp__game_editor__apply_plan. After the plan is returned, call apply_plan with that plan_id. When apply_plan says it needs a second approval, call confirm_risky_plan with that plan_id. Wait for that result. After STUDIO_FAIL, call plan_change with one studio loop step for the same sentence, then apply_plan, then confirm_risky_plan. After that plan runs, call plan_change with one studio test step again, then apply_plan, then confirm_risky_plan.
+```
+
+When the Dangerous Command panel shows `apply_plan` or `confirm_risky_plan`, the highlight is on `1. Allow once`. Press 1. That selects Allow once and confirms it. Do not press Enter first. The first applied test prints `STUDIO_FAIL` and a non-zero exit. The loop plan writes the scene. The next applied test prints `STUDIO` and exit 0. A later `studio` op `web` plan serves on 127.0.0.1 only after that trusted exit 0. When the Godot editor has no open project, those files go under plugin-data/game-editor/studio-project. The ledger is the same plugin-data folder (`HOME/.hermes` when `HERMES_HOME` is unset).
 
 ## Requirements
 
@@ -77,8 +173,8 @@ A bus missing from the project's bus layout file is added to it. Godot keeps a p
 - `game_do` op `play_session`: `goal` (`score >= 3` or a node path), `steps` (`action`, `key` or `wait`, 12 seconds in all), `watch` (runtime paths). Where the watched nodes start is read first, so the first move is judged too. A score goal adds the nodes that hold score (a script with `var score`, a Label showing `score:`) to `watch` when the plan is made. `ok` true means the game was playing, the frame counter advanced, positions were watched, and the goal was judged and met. A script error, a parse error, a line that says `ERROR:`, a line that names a script and a line (`level.gd:7 @`), a line that says `on a null instance`, or a line that says `node not found` is a failure. When that line names a file and a line, the error finding carries `file`, `line`, `code` (the text of that line) and `next`. A game that never stays up is still read from the editor log. Each error entry keeps the script path and line beside the message (Godot's Output prints that pair as `at: GDScript::reload (res://scripts/file.gd:3)`), and the finding carries that file, that line and the text of the line. Other logged lines (a warning that names no script line) stay `log` and do not by themselves make `ok` false. idle and frame_drop can still be listed. A missed goal stays `ok` false even when frames advanced. Every finding carries `evidence` from the build it played: the step it follows, the game's frame counter at that point, the watched nodes' positions and texts, the error lines from the game and editor logs, and a 240-pixel picture of the game after that step attached to the reply (up to three). An error finding that names a file and a line also carries `file`, `line`, `code` and `next`. `replay` is the exact `play_session` step to run the same input script again. A stall that follows a script error says so: Godot's debugger pauses a game run from the editor on an error. The report is a normal reply, not an error, because Hermes cuts an error reply to 2,048 characters; a plan still stops after a play that was not ok. `not_live` means the game process did not stay up with frames advancing. On a headless editor, the play step writes `res://ge_headless_arm.gd` and `res://ge_headless_arm.tscn`, opens that scene so its `@tool` script can add `--headless` to `editor/run/main_run_args` in memory, closes the scene, then removes the files. `project.godot` is not left changed. A windowed editor is not given `--headless`. The plan names these files before anyone is asked. `ok` true still requires the goal to be met; a missed goal stays `ok` false. A goal with neither a score comparison nor a node path is `goal_not_checked`.
 - `checks` op `gut`, `gdunit4` or `godot_ai`. A pass needs `"passed": true` (at least one test ran and none failed). A plan is refused when the framework, the test folder or the imported class names are missing.
 - `ship_build` op `export_game`: a local macOS, Web, Android or iOS build when that Godot version's export templates are installed. The plan names every file beside the output that exists; those need `overwrite`, and a source file beside it is refused. Missing templates are reported with file, source and size. `ship_build` downloads nothing and uploads nothing.
-- `studio`: four separate plans, in this order. `apply_plan` stops at the first error, so do not combine them. The goal sentence can be `The key is picked and a sound plays and the door opens. After 60, timeout_lose, then restart.` A sentence that does not name one of `fell`, `sound`, `picked`, `door`, `timeout_lose` and `restart` as a whole word is not a test. `paint the floor` is not a test. The reply is `This sentence cannot be a test.` and nothing is written. The check is this package's script. The model does not author it. A loop that prints STUDIO and quits 0 is not a pass. A loop.gd this package did not write is not a pass, including one that sets `picked`, `door_open` and `won` and emits `restarted`. Its bytes have to be the bytes this process writes for that sentence. Any other text on the `var limit_seconds :=` line is `unverified script: res://studio/loop.gd`, Godot is not started, and the sha256 record is not the allow-list. The running root of the scene has to be that `res://studio/loop.gd`. Keeping the file and attaching another script is not a pass, including a child script, an inherited scene, an autoload in project.godot or override.cfg, or any other resource this package did not write. The check reports unverified script: and that path. Godot is not started when that autoload is declared. The verdict uses --path on a directory this process creates, and that directory does not contain override.cfg. The check does not read those flags. `picked` is the key node becoming a child of the player. `door` is the door moved up with its collision shape disabled. `sound` is the generated beep playing after that pickup. `timeout_lose` is not the Limit signal, so a 0.05 second timer is not the 60 second timeout. `restart` is not that timer. Godot runs with --fixed-fps 60. timeout_lose is the fresh round's physics frames, the sentence's seconds times 60, so 60 seconds is 3600 frames, while Engine.time_scale stays 1 and the physics tick rate stays 60. The Limit timeout signal is not a pass. If Limit stops before those frames, the exit code is not 0. restart is true only after those frames, when the key is back on the floor, the door collision is back, and the player is back at the start position with velocity near zero. The scene hash covers `loop.tscn` and `loop.gd`. The check prints the observation line after it watches the loop.
-  1. `{"tool": "studio", "op": "test", "goal": "<that sentence>"}` writes the check and runs `godot --headless`. The first run prints `STUDIO_FAIL` for the parts the sentence named and exits non-zero. Show that string. After that process exits, this bridge appends one ledger row (the Godot version from `godot --version`, the test name, the scene hash, the process exit code, and the time) under `<HERMES_HOME>/plugin-data/game-editor`. The Godot process does not write that file and is not given a ledger key. A row this process did not append after the wait is not a pass. Exit 0 is recorded only when that process returned 0, check.gd is unchanged, the check's observation line is a pass, and, when the sentence names timeout_lose or restart, physics_frames is at least the sentence's seconds times 60. Any other result is recorded as exit 1. Do not call the test a pass until a trusted exit 0 is the latest row for that test.
+- `studio`: four separate plans, in this order. `apply_plan` stops at the first error, so do not combine them. The goal sentence can be `The key is picked and a sound plays and the door opens. After 60, timeout_lose, then restart.` A sentence that does not name one of `fell`, `sound`, `picked`, `door`, `timeout_lose` and `restart` as a whole word is not a test. `paint the floor` is not a test. The reply is `This sentence cannot be a test.` and nothing is written. The check is this package's script. The model does not author it. A loop that prints STUDIO and quits 0 is not a pass. A loop.gd this package did not write is not a pass, including one that sets `picked`, `door_open` and `won` and emits `restarted`. Its bytes have to be the bytes this process writes for that sentence. Any other text on the `var limit_seconds :=` line is `unverified script: res://studio/loop.gd`, Godot is not started for that byte-different loop.gd, and it is not started when an autoload is declared, and the sha256 record is not the allow-list. The running root of the scene has to be that `res://studio/loop.gd`. Keeping the file and attaching another script is not a pass, including a child script, an inherited scene, an autoload in project.godot or override.cfg, or any other resource this package did not write. The check reports unverified script: and that path. When that extra script is an embedded GDScript on the scene, the inspection process starts and the extra script does not run. The verdict uses --path on a directory this process creates, and that directory does not contain override.cfg. The check does not read those flags. `picked` is the key node becoming a child of the player. `door` is the door moved up with its collision shape disabled. `sound` is the generated beep playing after that pickup. `timeout_lose` is not the Limit signal, so a 0.05 second timer is not the 60 second timeout. `restart` is not that timer. Godot runs with --fixed-fps 60. timeout_lose is the fresh round's physics frames, the sentence's seconds times 60, so 60 seconds is 3600 frames, while Engine.time_scale stays 1 and the physics tick rate stays 60. The Limit timeout signal is not a pass. If Limit stops before those frames, the exit code is not 0. restart is true only after those frames, when the key is back on the floor, the door collision is back, and the player is back at the start position with velocity near zero. The scene hash covers `loop.tscn` and `loop.gd`. The check prints the observation line after it watches the loop.
+  1. `{"tool": "studio", "op": "test", "goal": "<that sentence>"}` writes the check and runs `godot --headless`. The first run prints `STUDIO_FAIL` for the parts the sentence named and exits non-zero. Show that string. After that process exits, this bridge appends one ledger row (the Godot version from `godot --version`, the test name, the scene hash, the process exit code, and the time) under plugin-data/game-editor (`HERMES_HOME` when set, otherwise `HOME/.hermes`). The Godot process does not write that file and is not given a ledger key. A row this process did not append after the wait is not a pass. Exit 0 is recorded only when that process returned 0, check.gd is unchanged, the check's observation line is a pass, and, when the sentence names timeout_lose or restart, physics_frames is at least the sentence's seconds times 60. Any other result is recorded as exit 1. Do not call the test a pass until a trusted exit 0 is the latest row for that test.
   2. `{"tool": "studio", "op": "loop", "goal": "<that sentence>"}` writes the loop for those parts and does not run it. The reply includes one CREDITS line for the generated beep.
   3. `studio` op `test` again with the same sentence. A pass prints `STUDIO` for those parts and exit 0, and the ledger's latest row for that test is exit 0 from that wait. The example sentence matches `sound`, `picked`, `door`, `timeout_lose` and `restart`. It does not match `fell`.
   4. `{"tool": "studio", "op": "web"}` writes `res://build/web/index.html` and `res://build/web.zip` and serves on 127.0.0.1 only. It stops the previous 127.0.0.1 listener first. It is refused, and it does not serve, until a trusted exit 0 is the latest row for a test. An empty ledger is not a pass. It downloads the pinned Godot 4.7.2 export template only after sha256 and sha512 match. It does not upload. Open the URL on this computer. To publish the build, upload that folder or zip yourself.
@@ -199,7 +295,7 @@ On 2026-10-21 on macOS with Godot 4.7.2 (headless editor, `GODOT_AI_ALLOW_HEADLE
 
 ## What was not tried
 
-- A live gateway chat and a session with a real model.
+- A live gateway chat.
 - Windows and Linux, the .NET build of Godot, add-on versions other than 4.3.0, Android and iOS export, and GameForge itself (its formats and its playtest report were read from its source and made here).
 
 ## Other Godot plugins for Hermes
@@ -210,7 +306,14 @@ On 2026-10-21 on macOS with Godot 4.7.2 (headless editor, `GODOT_AI_ALLOW_HEADLE
 
 ## Development
 
-`tests/` runs offline with the standard library (`python3 -m unittest discover -s tests`). `tools/extract_effects.py --upstream <godot-ai v4.3.0 checkout>` regenerates `bridge/effects.json`, and `--check` says whether it would change.
+`tests/` runs offline with the standard library (`python3 -m unittest discover -s tests`). `python3 -m pytest -q` is the same tree. The count depends on the pinned Godot 4.7.2 export template `Godot_v4.7.2-stable_export_templates.tpz` (1281349702 bytes, sha256 `f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011`). Neither count is a failure.
+
+| Pinned export template in cache | `python3 -m pytest -q` |
+| --- | --- |
+| present (`<HERMES_HOME>/plugin-data/game-editor/export-templates` or `/tmp/game-editor-export-templates`) | 227 passed, 3 skipped |
+| absent (`test_web_export_serves_loopback_only` skips with `pinned export template is not in the cache`) | 226 passed, 4 skipped |
+
+`tools/extract_effects.py --upstream <godot-ai v4.3.0 checkout>` regenerates `bridge/effects.json`, and `--check` says whether it would change.
 
 ## Source and license
 
