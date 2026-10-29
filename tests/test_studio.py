@@ -236,7 +236,7 @@ def _git_blob(sha: str, source: str) -> str | None:
 
 
 class _PinBlocked(Exception):
-    """The preship harness closed every socket. Any other failure still fails the test."""
+    """The sandboxed test run closed every socket. Any other failure still fails the test."""
 
 
 def _network_blocked(exc: BaseException) -> bool:
