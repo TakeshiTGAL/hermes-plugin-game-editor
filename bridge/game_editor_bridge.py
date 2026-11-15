@@ -66,7 +66,7 @@ def _load_sibling(name: str):
 
 studio = _load_sibling("studio")
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 UPSTREAM_VERSION = "4.3.0"
 HTTP_PORT = 8000
 WS_PORT = 9500

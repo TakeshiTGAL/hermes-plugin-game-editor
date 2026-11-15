@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Hermes v0.23.1 registers this portable skill as `game-editor:game-editor`. Hermes v0.22.2 still registers `agent-plugin-game-editor-ba281cc7:game-editor`. On v0.23.1, `skill_view` and `hermes chat -s` accept both names. `-s game-editor` is still unknown. The plugin-data directory stays `agent-plugin-game-editor-<id>` (the same hash as v0.22.2). The bus ledger stays in the MCP process working directory. `mcp.json` sets that directory to `${PLUGIN_DATA}/work`. That process has no plugin context. Checked by loading this plugin on Hermes v0.22.2 and v0.23.1.
+
 ## 2.0.0
 
 - After `STUDIO_FAIL`, the reply has one `next` field. It names one `plan_change` step, kind `loop`, and says to copy `plan_id=` (32 hex characters) from that plan's `next` field into `apply_plan`. Planning that same test again returns the same field and saves no plan. A studio plan's `next` field is `apply_plan plan_id=` plus the full id. When `apply_plan` asks for a second approval, its `next` field is `confirm_risky_plan plan_id=` plus the same id. A shorter id is refused. The check, the ledger row, the gate and the approval match are unchanged.

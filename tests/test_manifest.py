@@ -62,7 +62,7 @@ class ManifestTest(unittest.TestCase):
     def test_plugin_trust_and_app(self):
         plugin = _load("plugin.json")
         self.assertEqual(plugin["name"], "game-editor")
-        self.assertEqual(plugin["version"], "2.0.0")
+        self.assertEqual(plugin["version"], "2.0.1")
         # Hermes v0.22.2 validate warns "ignored unknown top-level field: requires_hermes"; the catalog entry keeps it.
         self.assertNotIn("requires_hermes", plugin)
         self.assertEqual(plugin["license"], "MIT")
@@ -112,6 +112,18 @@ class ManifestTest(unittest.TestCase):
                         "## Limits"):
             self.assertIn(heading, text)
         self.assertIn("Configure", text.split("## Limits", 1)[1])
+
+    def test_skill_preload_names_keep_v0222_and_name_v0231(self):
+        old = "agent-plugin-game-editor-ba281cc7:game-editor"
+        new = "game-editor:game-editor"
+        skill = _skill_text()
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        for blob in (skill, readme):
+            self.assertIn(old, blob)
+            self.assertIn(new, blob)
+        self.assertIn("`-s game-editor` is unknown", skill)
+        self.assertIn("`hermes chat -s game-editor` is unknown", readme)
+        self.assertIn("plugin-data/agent-plugin-game-editor-<id>", readme)
 
     def test_skill_names_every_tool(self):
         import importlib.util

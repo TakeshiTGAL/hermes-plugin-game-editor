@@ -1,7 +1,7 @@
 ---
 name: game-editor
 description: "Godot, a sentence that names a loop part becomes a tested loop and a loopback Web build. Edit the open project, one plan at a time."
-version: 2.0.0
+version: 2.0.1
 author: TakeshiTGAL
 license: MIT
 platforms: [macos]
@@ -11,7 +11,7 @@ metadata:
 
 # Game editor (Godot 4)
 
-Hermes v0.22.2 registers this skill as `agent-plugin-game-editor-ba281cc7:game-editor`. Preload it with `hermes chat --cli -s agent-plugin-game-editor-ba281cc7:game-editor`. `-s game-editor` is unknown. The eight tools stay deferred. If plan_change is not in the tool list, find it with tool_search and call it through tool_call.
+Hermes v0.22.2 registers this skill as `agent-plugin-game-editor-ba281cc7:game-editor`. Preload that version with `hermes chat --cli -s agent-plugin-game-editor-ba281cc7:game-editor`. Hermes v0.23.1 and later register it as `game-editor:game-editor`. Preload that version with `hermes chat --cli -s game-editor:game-editor`. The older name still preloads on v0.23.1. `-s game-editor` is unknown. The eight tools stay deferred. If plan_change is not in the tool list, find it with tool_search and call it through tool_call.
 
 ## When to use
 
