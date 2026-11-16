@@ -1940,10 +1940,74 @@ class ReviewFixTest(unittest.TestCase):
             res = fake.bridge.call("project_do", {"op": "run_game", "mode": "main"})
             self.assertTrue(res["isError"])
             self.assertTrue(res["content"][0]["text"].startswith("game-editor: run_game not_live"))
+            self.assertIn("This editor is windowed, so --headless was not added", res["content"][0]["text"])
+            self.assertNotIn("already on its command line", res["content"][0]["text"])
+            self.assertNotIn("reopen so --headless is on the command line", res["content"][0]["text"])
             self.assertNotIn("ran the scene files", json.dumps(res["content"]))
             self.assertTrue(json.loads(res["content"][1]["text"])["game_status"]["not_live"])
         finally:
             fake.close()
+
+    def test_run_game_headless_does_not_name_arm_reasons(self):
+        project = Project()
+        fake = FakeChild(project=project.root, game_status="stopped")
+        seen = []
+        fake.bridge.confirmer = lambda message: seen.append(message) or True
+        fake.bridge._editor_headless = lambda: True
+        try:
+            res = fake.bridge.call("project_do", {"op": "run_game", "mode": "main"})
+            self.assertTrue(seen, res["content"][0]["text"])
+            plan = seen[0]
+            reply = res["content"][0]["text"]
+            headless_next = B._not_live_next(True, None)
+            self.assertIn(headless_next, plan)
+            self.assertNotIn("not_live names why", plan)
+            self.assertNotIn("ge_headless_arm.gd", plan)
+            self.assertTrue(res["isError"], reply)
+            self.assertIn(headless_next, reply)
+            self.assertIn("already on its command line", reply)
+            self.assertNotIn("reopen so --headless is on the command line", reply)
+            self.assertNotIn("filesystem scan failed", reply)
+            self.assertNotIn("save or discard unsaved", reply)
+            names = [row["name"] for row in fake.sent()]
+            self.assertEqual(names, ["project_run"])
+            self.assertIn("still has no --headless", B._not_live_next(True, False, "flag_missing"))
+            self.assertIn("reopen so --headless is on the command line", B._not_live_next(True, False, "flag_missing"))
+        finally:
+            fake.close()
+            project.close()
+
+    def test_run_game_unknown_headless_names_null(self):
+        project = Project()
+        fake = FakeChild(project=project.root, game_status="stopped")
+        fake.bridge._editor_headless = lambda: None
+        try:
+            res = fake.bridge.call("project_do", {"op": "run_game", "mode": "main"})
+            reply = res["content"][0]["text"]
+            self.assertIn("editor_headless is null, so --headless was not added", reply)
+            self.assertNotIn("already on its command line", reply)
+            self.assertNotIn("scene_open", [row["name"] for row in fake.sent()])
+            self.assertNotIn("filesystem_manage", [row["name"] for row in fake.sent()])
+        finally:
+            fake.close()
+            project.close()
+
+    def test_play_session_plan_still_names_the_arm_reasons(self):
+        project = Project()
+        fake = FakeChild(project=project.root, scene="res://scenes/level.tscn", nodes=["/Level"])
+        try:
+            planned = fake.bridge.call("plan_change", {"steps": [{
+                "tool": "game_do", "op": "play_session", "goal": "walk",
+                "steps": [{"op": "wait", "seconds": 0.4}],
+            }]})
+            text = planned["content"][0]["text"]
+            self.assertFalse(planned["isError"], text)
+            self.assertIn("not_live names why", text)
+            self.assertIn("ge_headless_arm.gd", text)
+            self.assertIn("unsaved scene edits", text)
+        finally:
+            fake.close()
+            project.close()
 
     def test_screenshot_retries_a_2d_scene_once(self):
         fake = self.fake(screenshot="2d")

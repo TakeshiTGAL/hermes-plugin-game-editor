@@ -1,7 +1,7 @@
 ---
 name: game-editor
 description: "Godot, a sentence that names a loop part becomes a tested loop and a loopback Web build. Edit the open project, one plan at a time."
-version: 2.0.3
+version: 2.0.4
 author: TakeshiTGAL
 license: MIT
 platforms: [macos]
@@ -90,7 +90,7 @@ Quote the first line of the reply. Do not describe values the tools did not retu
 - `did not compile` or `Parse Error` in `diagnostics` → quote the line and offer a fix plan.
 - `changed while this plan ran` on a script → the editor saved an old copy from an open script tab, or someone edited it. Quote the line, ask the user, and patch only if they want.
 - `already there` → pick another node name. `plain path` → use the path from `scene_tree`.
-- `not_live` → the game process did not start. Say so. Do not rewrite a script for this unless the reply names a new script error from this run. When `editor_headless` is null, `--headless` was not added, including when the editor log contains `Failed to execute`. Next: open a windowed editor, or reopen so `--headless` is on the command line, then play again. When the editor is headless and the arm does not add `--headless`, quote the reply's reason. Unsaved scene edits are one reason. A failed filesystem scan, a failed open of the arm scene, a write error, and `editor/run/main_run_args` still missing `--headless` are the others. `Failed to execute` is the editor process stdout and is not in `logs_read`. A windowed editor is not given `--headless`.
+- `not_live` → the game process did not start. Say so. Do not rewrite a script for this unless the reply names a new script error from this run. When `editor_headless` is null, `--headless` was not added, including when the editor log contains `Failed to execute`. Next: open a windowed editor, or reopen so `--headless` is on the command line, then play again. When the editor is headless and the arm does not add `--headless`, quote the reply's reason. Unsaved scene edits are one reason. A failed filesystem scan, a failed open of the arm scene, a write error, and `editor/run/main_run_args` still missing `--headless` are the others. Those reasons are `play_session`. `project_do` op `run_game` does not arm. When the editor command already shows `--headless`, its `not_live` says `--headless` is already on that command line and names a windowed editor or `play_session`. It does not name an arm failure, and it does not say to put `--headless` on the command line again. `Failed to execute` is the editor process stdout and is not in `logs_read`. A windowed editor is not given `--headless`.
 - `goal_not_checked` → the goal named no score comparison or node path; restate it as `score >= 3`.
 - `goal_missed` with `score is missing` → watch the node with `var score` or the score Label.
 - `stall` → the game stopped answering (an infinite loop looks like this); quote `repro`.

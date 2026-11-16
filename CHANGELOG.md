@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.4
+
+- `run_game` does not call the headless arm. Its plan said `not_live` names the five arm failures (unsaved scene edits, a failed filesystem scan, a failed open of the arm scene, a write error, or `editor/run/main_run_args` still missing `--headless`). That sentence stays on `play_session` only. `play_session` is the only caller of the arm.
+- When the editor command already shows `--headless`, `run_game` `not_live` says `--headless` is already on that command line. It does not say to reopen so `--headless` is on the command line. Next is a windowed editor, or `game_do` op `play_session`, which adds `--headless` to `editor/run/main_run_args` when the editor command shows it. It does not name an arm failure.
+- This is not a Hermes v0.23.1 API change. No new Hermes API is called. `requires_hermes` stays unset. Checked with this repo's tests (`HOME` set to a temporary directory).
+
 ## 2.0.3
 
 - The 2.0.2 code still called the headless arm when `editor_headless` was null and the editor log contained `Failed to execute`, then said `--headless` was not added, because that return was discarded. That call is gone. When the editor command cannot be read, `--headless` is not added, including when the log contains `Failed to execute`. Arming then would start a windowed editor's game headless. `Failed to execute` stays the editor process stdout (`editor/run/editor_run.cpp`) and is not in `logs_read`.

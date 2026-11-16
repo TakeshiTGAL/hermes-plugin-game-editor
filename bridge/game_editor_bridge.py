@@ -66,7 +66,7 @@ def _load_sibling(name: str):
 
 studio = _load_sibling("studio")
 
-VERSION = "2.0.3"
+VERSION = "2.0.4"
 UPSTREAM_VERSION = "4.3.0"
 HTTP_PORT = 8000
 WS_PORT = 9500
@@ -3530,16 +3530,30 @@ def _session_live(result: dict) -> bool:
     return isinstance(status, dict) and status.get("status") == "live"
 
 
+def _run_game_headless_next() -> str:
+    """run_game does not arm. headless True means --headless is already on the editor command."""
+    return (
+        "This editor is headless and --headless is already on its command line. "
+        "run_game does not add --headless to editor/run/main_run_args and does not open the arm scene. "
+        "A headless editor cannot launch a windowed game: EditorInterface.play_main_scene fails in "
+        "editor/run/editor_run.cpp (Failed to execute). That line is the editor process stdout and is not "
+        "in logs_read. Next: open a windowed editor and play again, or use game_do op play_session, which "
+        "adds --headless to editor/run/main_run_args when the editor command shows it. "
+        "Do not rewrite a script for this."
+    )
+
+
 def _not_live_next(headless: bool | None, armed: bool | None, why: str = "") -> str:
     """What to do when the game process did not become live and this run named no new script error.
 
-    --headless is added only when the editor command shows it. A windowed editor is not armed.
-    When the command cannot be read, it is not armed either, including when the editor log contains
-    Failed to execute: arming then would start a windowed editor's game headless. That line is the
-    editor process stdout (editor/run/editor_run.cpp) and is not in logs_read, so this does not wait
-    for that string. A false arm names why. Unsaved scene edits are one reason. A failed filesystem
-    scan, a failed open of the arm scene, a write error, and main_run_args still missing --headless
-    are the others.
+    --headless is added only by play_session, and only when the editor command shows it. A windowed
+    editor is not armed. When the command cannot be read, it is not armed either, including when the
+    editor log contains Failed to execute: arming then would start a windowed editor's game headless.
+    That line is the editor process stdout (editor/run/editor_run.cpp) and is not in logs_read, so this
+    does not wait for that string. run_game does not arm. When the editor command already shows
+    --headless, run_game says so and does not say to put --headless on the command line again. A false
+    play_session arm names why. Unsaved scene edits are one reason. A failed filesystem scan, a failed
+    open of the arm scene, a write error, and main_run_args still missing --headless are the others.
     """
     if headless is True and armed is True:
         return ("--headless was added to editor/run/main_run_args in memory and the helper still did not "
@@ -3570,9 +3584,12 @@ def _not_live_next(headless: bool | None, armed: bool | None, why: str = "") -> 
                 "The arm ran and editor/run/main_run_args still has no --headless. "
                 "Next: open a windowed editor, or reopen so --headless is on the command line, then play again. "
                 "Do not rewrite a script for this.")
+    if headless is True and armed is None:
+        return _run_game_headless_next()
     if headless is True:
-        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
-                "Next: open a windowed editor, or reopen so --headless is on the command line, then play again. "
+        return ("This editor is headless and --headless is already on its command line. "
+                "--headless was not added to editor/run/main_run_args. "
+                "Next: open a windowed editor and play again. "
                 "Do not rewrite a script for this.")
     if headless is False:
         return ("This editor is windowed, so --headless was not added. "
@@ -9408,7 +9425,15 @@ class Bridge:
             target_scene = target if isinstance(target, str) and target.startswith("res://") else scene
             out.extend(self._scene_discard_lines(target_scene or "", root))
         # project code
-        if gname in ("run_game", "play_session"):
+        if gname == "run_game":
+            out.append("runs project code: plays the game in a separate Godot process")
+            out.append("run_game does not open an arm scene and does not add --headless to "
+                       "editor/run/main_run_args. It does not name an arm failure. "
+                       "When the editor command already shows --headless, not_live says: "
+                       + _not_live_next(True, None)
+                       + " When that command cannot be read, not_live says: " + _not_live_next(None, None)
+                       + " When the editor is windowed, not_live says: " + _not_live_next(False, None))
+        elif gname == "play_session":
             out.append("runs project code: plays the game in a separate Godot process")
             out.append("a headless editor sets editor/run/main_run_args to include --headless in memory only, "
                        "writes res://ge_headless_arm.gd and res://ge_headless_arm.tscn, opens that scene so its "
