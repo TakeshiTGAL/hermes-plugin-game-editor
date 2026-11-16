@@ -62,7 +62,7 @@ class ManifestTest(unittest.TestCase):
     def test_plugin_trust_and_app(self):
         plugin = _load("plugin.json")
         self.assertEqual(plugin["name"], "game-editor")
-        self.assertEqual(plugin["version"], "2.0.1")
+        self.assertEqual(plugin["version"], "2.0.2")
         # Hermes v0.22.2 validate warns "ignored unknown top-level field: requires_hermes"; the catalog entry keeps it.
         self.assertNotIn("requires_hermes", plugin)
         self.assertEqual(plugin["license"], "MIT")

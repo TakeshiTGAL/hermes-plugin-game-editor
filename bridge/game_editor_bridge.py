@@ -66,7 +66,7 @@ def _load_sibling(name: str):
 
 studio = _load_sibling("studio")
 
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 UPSTREAM_VERSION = "4.3.0"
 HTTP_PORT = 8000
 WS_PORT = 9500
@@ -1594,6 +1594,22 @@ def _log_key(item) -> str:
         str(item.get("path") or ""),
         str(item.get("line") or ""),
     ))
+
+
+_SCRIPT_LOG_WORDS = ("parse error", "parser error", "script error")
+
+
+def _log_names_script_error(items: list, filename: str) -> str:
+    """One fresh log entry that names this file and a script error, or ""."""
+    name = filename.rsplit("/", 1)[-1].lower()
+    if not name:
+        return ""
+    for item in items:
+        blob = json.dumps(item, ensure_ascii=False).lower()
+        if name in blob and any(word in blob for word in _SCRIPT_LOG_WORDS):
+            text = item.get("text") if isinstance(item, dict) else item
+            return str(text)[:300]
+    return ""
 
 
 def _fresh_log_items(before: list, after: list) -> list:
@@ -3512,6 +3528,39 @@ def _session_live(result: dict) -> bool:
         return True
     status = data.get("game_status")
     return isinstance(status, dict) and status.get("status") == "live"
+
+
+def _not_live_next(headless: bool | None, armed: bool | None) -> str:
+    """What to do when the game process did not become live and this run named no new script error.
+
+    --headless is added only when the editor command shows it. A windowed editor is not armed.
+    When the command cannot be read, it is not armed either: arming then would start a windowed
+    editor's game headless. Failed to execute is the editor process stdout (editor/run/editor_run.cpp)
+    and is not in logs_read, so this does not wait for that string.
+    """
+    if headless is True and armed:
+        return ("--headless was added to editor/run/main_run_args in memory and the helper still did not "
+                "become live. Next: open the project in a windowed editor and play again. "
+                "editor/run/editor_run.cpp Failed to execute is the editor process stdout and is not in logs_read. "
+                "Do not rewrite a script for this.")
+    if headless is True:
+        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
+                "Next: save or discard unsaved scene edits, then play again so the arm can run. "
+                "Do not rewrite a script for this.")
+    if headless is False:
+        return ("This editor is windowed, so --headless was not added. "
+                "Next: run the main scene from the editor and read its output. "
+                "Do not rewrite a script for this.")
+    if armed:
+        return ("editor_headless was null and --headless was added after the editor log named Failed to execute. "
+                "The helper still did not become live. Next: open a windowed editor and play again. "
+                "Do not rewrite a script for this.")
+    return ("editor_headless is null, so --headless was not added to editor/run/main_run_args. "
+            "A headless editor cannot launch a windowed Godot: EditorInterface.play_main_scene fails in "
+            "editor/run/editor_run.cpp (Failed to execute). That line is the editor process stdout and is not "
+            "in logs_read. Next: open the editor in a window, or reopen it so --headless is on its command "
+            "line, then play again. A parse error already in the log is not this launch failure. "
+            "Do not rewrite a script for this.")
 
 
 def _viewport_not_3d(keys: dict, result: dict) -> bool:
@@ -7484,8 +7533,89 @@ class Bridge:
         body = "\n".join(diffs) if diffs else "the editor and the file agree"
         return {"content": [{"type": "text", "text": f"game-editor: compared {scene}\n{body}"}], "isError": False}
 
-    def _compile_oracle(self, step: dict, result: dict) -> dict | None:
-        """A written script is not a success when the editor's diagnostics or the log after the write name a parse error."""
+    def _script_log_before(self, step: dict) -> list | None:
+        """Editor-log entries already present before a script write. None when this step does not write one,
+        or when the log could not be read. A missing read is not treated as an empty log."""
+        gname, _gop, _spec = self._step_spec(step)
+        path = step.get("path") if isinstance(step.get("path"), str) else ""
+        if gname not in ("create_script", "edit_script", "write_file") or not path.lower().endswith((".gd", ".cs")):
+            return None
+        return self._editor_log_snapshot()
+
+    def _editor_log_snapshot(self) -> list | None:
+        logs = self.upstream("logs_read", {"source": "editor", "count": 40})
+        if logs.get("bridge_error") or logs.get("isError"):
+            return None
+        return _log_items(_first_json(logs))
+
+    def _append_text(self, result: dict, note: str) -> None:
+        if not note:
+            return
+        content = list(result.get("content") or [])
+        content.append({"type": "text", "text": note})
+        result["content"] = content
+
+    def _scene_names_script(self, scene: str, script: str, root: str) -> bool:
+        if not (scene.startswith("res://") and script.startswith("res://")):
+            return False
+        try:
+            text = self.disk_path(scene, root).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return False
+        return script in text
+
+    def _refresh_written_script(self, path: str, result: dict, root: str | None, mid) -> str:
+        """Say whether the editor's loaded copy matches a clean write, and re-read the open scene when it does not.
+
+        Godot AI 4.3.0 sets reloaded and reload_reason (script_handler.gd _refresh_loaded_gdscript). A reply
+        with no reloaded key is an older server: do not reload a scene. Headless EditorFileSystem.update_file
+        does not refresh a GDScript ResourceLoader has not cached, so not_loaded means the file changed and
+        the loaded copy did not. Re-read the open scene only when it names this script and no unsaved edit
+        is on record. There is no reload_scripts op, and reload_plugin drops the connection.
+        """
+        data = _first_json(result)
+        if "reloaded" not in data:
+            return ""
+        reason = data.get("reload_reason") if isinstance(data.get("reload_reason"), str) else ""
+        if data.get("reloaded") is True or reason == "already_current":
+            return (f"game-editor: {path} is the new source and the editor reloaded it "
+                    f"(reloaded=true, reload_reason={reason or 'reloaded'}). "
+                    "Do not write it again for an older editor-log line.")
+        if reason == "csharp_requires_build":
+            return (f"game-editor: {path} was written. C# is not reloaded until the .NET assembly is built "
+                    "(reload_reason=csharp_requires_build). Do not treat an older editor-log line as this write.")
+        if reason == "parse_error":
+            return ""
+        if reason not in ("not_loaded", "reload_failed"):
+            shown = reason or "not given"
+            return (f"game-editor: {path} was written. The editor did not reload it (reload_reason={shown}). "
+                    "Do not write it again for an older editor-log line.")
+        held = (f"game-editor: {path} is the new source on disk. The editor's loaded copy was not refreshed "
+                f"(reload_reason={reason}). ")
+        if root is None:
+            return held + "No project folder was open, so the scene was not re-read. Do not write the script again."
+        scene = self.current_scene()
+        unsaved = self._unsaved_blocks_arm()
+        if unsaved or not self._scene_names_script(scene, path, root):
+            why = "unsaved edits are on record" if unsaved else "that scene does not name this script"
+            where = scene or "no open scene"
+            return (held + f"The scene was not re-read ({where}; {why}). Do not write the script again. "
+                    "Next: save or approve discarding unsaved edits, then scene_do op open_scene with "
+                    "force_reload on the scene that names this script. There is no reload_scripts op. "
+                    "reload_plugin drops the connection and does not reload this script.")
+        opened = self.upstream("scene_open", {"path": scene, "force_reload": True}, 20, mid)
+        if opened.get("isError") or opened.get("bridge_error"):
+            return (held + f"Re-reading {scene} failed. Do not write the script again. "
+                    "Next: scene_do op open_scene with force_reload on that scene.")
+        return (held + f"{scene} was re-read from disk (force_reload). No unsaved edit was on record. "
+                "Do not write the script again for an older editor-log line.")
+
+    def _compile_oracle(self, step: dict, result: dict, prior_logs: list | None, root: str | None, mid) -> dict | None:
+        """A written script fails when this write's diagnostics, or a log line that arrived after it, name a parse error.
+
+        A line that was already in the editor log is not this write. Godot AI's reloaded flag says whether the
+        loaded copy changed; when it did not, the open scene is re-read if that is safe.
+        """
         if result.get("isError"):
             return None
         gname, _gop, _spec = self._step_spec(step)
@@ -7499,14 +7629,20 @@ class Bridge:
                 line = item.get("line")
                 return error_result(
                     f"game-editor: {path} was written and did not compile. upstream_quote: {path}:{line}: {text}")
-        logs = self.upstream("logs_read", {"source": "editor", "count": 40})
-        blob = json.dumps(logs.get("content") or "", ensure_ascii=False)
-        name = path.rsplit("/", 1)[-1].lower()
-        low = blob.lower()
-        if name in low and any(word in low for word in ("parse error", "parser error", "script error")):
+        if data.get("reload_reason") == "parse_error":
             return error_result(
-                f"game-editor: {path} was written and the editor log after the step names a script error. "
-                f"That is not success. upstream_quote: {_first_line(logs)[:300]}")
+                f"game-editor: {path} was written and did not compile. upstream_quote: reload_reason=parse_error")
+        note = self._refresh_written_script(path, result, root, mid)
+        if prior_logs is not None:
+            logs = self.upstream("logs_read", {"source": "editor", "count": 40})
+            if not logs.get("bridge_error") and not logs.get("isError"):
+                fresh = _fresh_log_items(prior_logs, _log_items(_first_json(logs)))
+                quoted = _log_names_script_error(fresh, path)
+                if quoted:
+                    return error_result(
+                        f"game-editor: {path} was written and the editor log after the step names a script error. "
+                        f"That is not success. upstream_quote: {quoted}")
+        self._append_text(result, note)
         return None
 
     def _run_plan(self, plan: dict, root: str, mid, baseline_done: bool) -> dict:
@@ -7532,6 +7668,7 @@ class Bridge:
             before = self.step_before(step, root)
             before_files = self._capture_files(root)
             declared = self._declared_rels(step, root) | planned_side
+            prior_logs = self._script_log_before(step)
             try:
                 if step.get("tool") == "studio":
                     result = studio.execute(step, root, self.godot_binary())
@@ -7544,7 +7681,7 @@ class Bridge:
             stopped_here = bool(result.pop("stop_plan", False))
             if not result.get("isError"):
                 result = self.step_checked(step, result, before, root, plan)
-            compile_error = self._compile_oracle(step, result)
+            compile_error = self._compile_oracle(step, result, prior_logs, root, mid)
             if compile_error is not None:
                 result = compile_error
             if self._step_may_import(step):
@@ -9249,7 +9386,12 @@ class Bridge:
             out.append("a headless editor sets editor/run/main_run_args to include --headless in memory only, "
                        "writes res://ge_headless_arm.gd and res://ge_headless_arm.tscn, opens that scene so its "
                        "@tool script can set the argument, closes the scene, then removes the files. "
-                       "project.godot is not left changed. A windowed editor is not given --headless")
+                       "project.godot is not left changed. This runs only when the editor command line shows "
+                       "--headless. When that command cannot be read, --headless is not added. A windowed editor "
+                       "is not given --headless. A headless editor cannot launch a windowed game: "
+                       "EditorInterface.play_main_scene fails in editor/run/editor_run.cpp (Failed to execute). "
+                       "That line is the editor process stdout and is not in logs_read. not_live then names the "
+                       "next step and is not a reason to rewrite the script")
         elif gname == "run_game_code":
             out.append("runs code written in this plan: evaluates this code inside the running game: "
                        + json.dumps(str(keys.get("code") or ""), ensure_ascii=False))
@@ -9808,9 +9950,10 @@ class Bridge:
         data["helper_live"] = False
         data["not_live"] = True
         reason = status.get("status") or "not_live"
+        nxt = _not_live_next(self._editor_headless(), None)
         head = ("game-editor: run_game not_live. The game was not played "
                 f"({reason}). game_status.not_live is true. A headless editor usually stops here; do not say it "
-                "ran. A separate Godot process can show a floor and a score when it really played.")
+                f"ran. {nxt} A separate Godot process can show a floor and a score when it really played.")
         return {"content": [{"type": "text", "text": head},
                             {"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
                 "isError": True}
@@ -10347,15 +10490,28 @@ class Bridge:
                 result["stop_plan"] = True
                 return result
             reason = str(started.get("bridge_error") or _first_line(started))[:300]
+            started_data = _first_json(started)
+            started_status = started_data.get("game_status") if isinstance(started_data.get("game_status"), dict) else {}
+            bits = []
+            if started_status.get("helper_expected") is True:
+                bits.append("helper_expected=true")
+            live_flag = started_status.get("helper_live", started_data.get("helper_live"))
+            if live_flag is False:
+                bits.append("helper_live=false")
+            if started_status.get("active") is False:
+                bits.append("active=false")
+            fact = (" " + " ".join(bits) + ".") if bits else ""
+            nxt = _not_live_next(headless, bool(armed))
+            summary = ("game-editor: play_session ok=false failure=not_live. Nothing was played. "
+                       "The game process did not start." + fact + " " + nxt)
             payload = {"ok": False, "failure": "not_live", "editor_headless": headless,
                        "headless_arm": armed, "truncated": False, "findings_total": 0,
                        "samples_total": 0, "source": "godot game session",
                        "as_of": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                       "reason": reason, "findings": [], "autosave": parsed["autosave"],
+                       "reason": reason, "next": nxt, "findings": [], "autosave": parsed["autosave"],
                        "oracle": {"playing": False, "frames_before": None, "frames_after": None, "advanced": False},
                        "upstream_quote": reason}
-            return json_result("game-editor: play_session ok=false failure=not_live. Nothing was played.",
-                               payload, True)
+            return json_result(summary, payload, True)
         samples: list[dict] = []
         halt = False
         # Where the watched nodes are before the first step, so the first move is judged like the others.

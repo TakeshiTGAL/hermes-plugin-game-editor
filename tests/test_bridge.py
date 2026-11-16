@@ -295,13 +295,16 @@ class FakeChild:
                  signals: dict | None = None, resources: dict | None = None, game_status: str | None = None,
                  screenshot: str | None = None, screenshot_2d: str | None = None, layout: dict | None = None,
                  node_types: dict | None = None, clobber: dict | None = None,
-                 open_scenes: list | None = None, play_touch: list | None = None):
+                 open_scenes: list | None = None, play_touch: list | None = None,
+                 script_reload: dict | None = None, editor_logs: list | None = None,
+                 editor_logs_after: list | None = None):
         self.tmp = tempfile.TemporaryDirectory()
         self.calls = Path(self.tmp.name) / "calls.jsonl"
         env = dict(os.environ)
         for key in ("FAKE_PROJECT_PATH", "FAKE_SCENE", "FAKE_NODES", "FAKE_PROPS", "FAKE_GROUPS",
                     "FAKE_SIGNALS", "FAKE_RESOURCES", "FAKE_GAME_STATUS", "FAKE_SCREENSHOT", "FAKE_SCREENSHOT_2D",
-                    "FAKE_LAYOUT", "FAKE_NODE_TYPES", "FAKE_SAVE_CLOBBER", "FAKE_OPEN_SCENES", "FAKE_PLAY_TOUCH"):
+                    "FAKE_LAYOUT", "FAKE_NODE_TYPES", "FAKE_SAVE_CLOBBER", "FAKE_OPEN_SCENES", "FAKE_PLAY_TOUCH",
+                    "FAKE_SCRIPT_RELOAD", "FAKE_EDITOR_LOGS", "FAKE_EDITOR_LOGS_AFTER"):
             env.pop(key, None)
         disk_props, disk_groups, disk_signals, disk_resources = ({}, {}, {}, {})
         if project and scene:
@@ -343,6 +346,12 @@ class FakeChild:
             env["FAKE_OPEN_SCENES"] = json.dumps(open_scenes)
         if play_touch:
             env["FAKE_PLAY_TOUCH"] = json.dumps(play_touch)
+        if script_reload is not None:
+            env["FAKE_SCRIPT_RELOAD"] = json.dumps(script_reload)
+        if editor_logs is not None:
+            env["FAKE_EDITOR_LOGS"] = json.dumps(editor_logs)
+        if editor_logs_after is not None:
+            env["FAKE_EDITOR_LOGS_AFTER"] = json.dumps(editor_logs_after)
         self.bridge = B.Bridge(argv=[sys.executable, "-I", str(FAKE), str(self.calls), mode], env=env)
         self.bridge.confirmer = lambda _message: True
 
@@ -2664,11 +2673,95 @@ class PlayExportTest(unittest.TestCase):
         bridge.upstream = upstream
         result = bridge.play_session({"goal": "walk", "steps": [{"op": "wait", "seconds": 0.4}]}, "/proj", None)
         self.assertTrue(result["isError"])
-        self.assertIn("not_live", result["content"][0]["text"])
+        text = result["content"][0]["text"]
+        self.assertIn("not_live", text)
+        self.assertIn("Nothing was played", text)
+        self.assertIn("did not start", text)
+        self.assertIn("windowed", text)
+        self.assertIn("Do not rewrite", text)
+        self.assertNotIn("scene_open", [name for name, _, _ in calls])
         self.assertEqual(_payload(result)["findings"], [])
+        self.assertIn("windowed", _payload(result)["next"])
         self.assertEqual([name for name, _, _ in calls],
                          ["project_manage", "logs_read", "logs_read", "project_run",
                           "logs_read", "logs_read", "project_manage"])
+
+    def test_unknown_headless_not_live_names_the_next_step_and_does_not_arm(self):
+        bridge, calls = self._bridge()
+
+        def upstream(name, arguments, timeout=None, mid=None):
+            calls.append((name, arguments, timeout))
+            if name == "project_run":
+                body = {"helper_live": False, "game_status": {
+                    "status": "stopped", "helper_expected": True, "helper_live": False,
+                    "active": False, "elapsed_msec": 0}}
+                return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+            if name == "logs_read":
+                return {"content": [{"type": "text", "text": json.dumps({"lines": []})}], "isError": False}
+            return {"content": [{"type": "text", "text": "{}"}], "isError": False}
+
+        bridge.upstream = upstream
+        bridge._editor_headless = lambda: None
+        result = bridge.play_session({"goal": "walk", "steps": [{"op": "wait", "seconds": 0.4}]}, "/proj", None)
+        text = result["content"][0]["text"]
+        self.assertTrue(result["isError"], text)
+        self.assertIn("not_live", text)
+        self.assertIn("Nothing was played", text)
+        self.assertIn("did not start", text)
+        self.assertIn("helper_expected=true", text)
+        self.assertIn("helper_live=false", text)
+        self.assertIn("active=false", text)
+        self.assertIn("editor_headless is null", text)
+        self.assertIn("Failed to execute", text)
+        self.assertIn("Do not rewrite", text)
+        self.assertNotIn("The game did play", text)
+        names = [name for name, _, _ in calls]
+        self.assertNotIn("scene_open", names)
+        self.assertNotIn("filesystem_manage", names)
+        payload = _payload(result)
+        self.assertIsNone(payload["editor_headless"])
+        self.assertIsNone(payload["headless_arm"])
+        self.assertEqual(payload["findings"], [])
+        self.assertIn("editor_headless is null", payload["next"])
+
+    def test_a_headless_editor_arms_and_removes_the_files(self):
+        root = tempfile.TemporaryDirectory()
+        try:
+            bridge, calls = self._bridge()
+            bridge._editor_headless = lambda: True
+            seen = {"settings": 0}
+
+            def upstream(name, arguments, timeout=None, mid=None):
+                calls.append((name, arguments, timeout))
+                if name == "project_manage" and arguments.get("op") == "settings_get":
+                    seen["settings"] += 1
+                    flag = "--headless" if seen["settings"] > 1 else ""
+                    return {"content": [{"type": "text", "text": json.dumps({"value": flag})}], "isError": False}
+                if name == "project_run":
+                    body = {"helper_live": True, "game_status": {"status": "live"}}
+                    return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+                if name == "logs_read":
+                    return {"content": [{"type": "text", "text": json.dumps({"lines": []})}], "isError": False}
+                if name == "game_manage" and arguments.get("op") == "debug_status":
+                    body = {"state": {"process_frames": 40}}
+                    return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+                if name == "game_manage" and arguments.get("op") == "get_node_info":
+                    body = {"name": "Player", "found": True, "properties": {"position": {"x": 1, "y": 2}}}
+                    return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+                return {"content": [{"type": "text", "text": "{}"}], "isError": False}
+
+            bridge.upstream = upstream
+            result = bridge.play_session({
+                "goal": "walk", "steps": [{"op": "wait", "seconds": 0.4}],
+                "watch": ["/root/Main/Player"],
+            }, root.name, None)
+            self.assertFalse(result["isError"], result["content"][0]["text"])
+            opens = [args for name, args, _ in calls if name == "scene_open"]
+            self.assertTrue(any((args or {}).get("path") == "res://ge_headless_arm.tscn" for args in opens))
+            self.assertFalse((Path(root.name) / "ge_headless_arm.gd").exists())
+            self.assertFalse((Path(root.name) / "ge_headless_arm.tscn").exists())
+        finally:
+            root.cleanup()
 
     def test_a_dead_run_names_the_script_line(self):
         root = tempfile.TemporaryDirectory()
@@ -3302,6 +3395,132 @@ class PlanReadsOnlyTest(unittest.TestCase):
             self.assertNotIn("KeyError", buses["content"][0]["text"])
         finally:
             fake.close()
+
+
+OLD_MOVER_LOG = [{
+    "level": "error", "source": "editor",
+    "text": "Parse Error: Expected parameter name.",
+    "path": "res://mover.gd", "line": 3,
+}]
+
+
+class ScriptReloadTest(unittest.TestCase):
+    def _project(self) -> Project:
+        project = Project()
+        (project.root / "mover.gd").write_text(
+            "extends Node2D\n\nfunc _physics_process(:\n\tposition.x += 8.0\n", encoding="utf-8")
+        (project.root / "mover.tscn").write_text(
+            '[gd_scene load_steps=2 format=3]\n\n'
+            '[ext_resource type="Script" path="res://mover.gd" id="1"]\n\n'
+            '[node name="Mover" type="Node2D"]\n'
+            'script = ExtResource("1")\n', encoding="utf-8")
+        return project
+
+    def _apply(self, fake: FakeChild) -> dict:
+        return apply_one(fake.bridge, {
+            "tool": "script_do", "op": "script", "path": "res://mover.gd",
+            "old_text": "func _physics_process(:",
+            "new_text": "func _physics_process(delta):",
+        })
+
+    @staticmethod
+    def _text(result: dict) -> str:
+        return "\n".join(item.get("text", "") for item in result.get("content") or [] if isinstance(item, dict))
+
+    def _fake(self, project: Project, **kwargs) -> FakeChild:
+        return FakeChild(project=project.root, scene="res://mover.tscn", editor_logs=OLD_MOVER_LOG, **kwargs)
+
+    def test_an_older_parse_line_does_not_fail_the_write(self):
+        project = self._project()
+        fake = self._fake(project)
+        try:
+            res = self._apply(fake)
+            text = self._text(res)
+            self.assertFalse(res["isError"], text)
+            self.assertNotIn("That is not success", text)
+            self.assertNotIn("editor log after the step", text)
+            self.assertFalse(any(
+                row["name"] == "scene_open" and (row.get("arguments") or {}).get("force_reload")
+                for row in fake.sent()))
+            self.assertIn("func _physics_process(delta):", (project.root / "mover.gd").read_text(encoding="utf-8"))
+        finally:
+            fake.close()
+            project.close()
+
+    def test_reloaded_true_says_the_editor_reread_and_ignores_the_old_line(self):
+        project = self._project()
+        fake = self._fake(project, script_reload={
+            "reloaded": True, "reload_reason": "already_current", "diagnostics": []})
+        try:
+            res = self._apply(fake)
+            text = self._text(res)
+            self.assertFalse(res["isError"], text)
+            self.assertIn("the editor reloaded it", text)
+            self.assertNotIn("That is not success", text)
+            self.assertFalse(any(
+                row["name"] == "scene_open" and (row.get("arguments") or {}).get("force_reload")
+                for row in fake.sent()))
+        finally:
+            fake.close()
+            project.close()
+
+    def test_not_loaded_rereads_the_open_scene(self):
+        project = self._project()
+        fake = self._fake(project, script_reload={
+            "reloaded": False, "reload_reason": "not_loaded", "diagnostics": []})
+        try:
+            res = self._apply(fake)
+            text = self._text(res)
+            self.assertFalse(res["isError"], text)
+            self.assertIn("was re-read from disk", text)
+            self.assertIn("Do not write the script again", text)
+            self.assertNotIn("That is not success", text)
+            opens = [row for row in fake.sent() if row["name"] == "scene_open"
+                     and (row.get("arguments") or {}).get("force_reload")]
+            self.assertEqual(len(opens), 1, fake.sent())
+            self.assertEqual(opens[0]["arguments"].get("path"), "res://mover.tscn")
+        finally:
+            fake.close()
+            project.close()
+
+    def test_not_loaded_does_not_discard_unsaved_edits(self):
+        project = self._project()
+        fake = self._fake(project, script_reload={
+            "reloaded": False, "reload_reason": "not_loaded", "diagnostics": []})
+        fake.bridge.edited_props["res://mover.tscn"] = {
+            ("Mover", "position"): {"prior": False, "value": {"x": 1}}}
+        try:
+            res = self._apply(fake)
+            text = self._text(res)
+            self.assertFalse(res["isError"], text)
+            self.assertIn("unsaved", text)
+            self.assertIn("open_scene", text)
+            self.assertIn("Do not write the script again", text)
+            self.assertNotIn("That is not success", text)
+            self.assertIn("There is no reload_scripts op", text)
+            self.assertFalse(any(
+                row["name"] == "scene_open" and (row.get("arguments") or {}).get("force_reload")
+                for row in fake.sent()))
+        finally:
+            fake.close()
+            project.close()
+
+    def test_a_new_parse_line_after_the_write_still_fails(self):
+        project = self._project()
+        fresh = [{"level": "error", "source": "editor",
+                  "text": "Parse Error: Expected parameter name.",
+                  "path": "res://mover.gd", "line": 3}]
+        fake = self._fake(project, editor_logs_after=fresh, script_reload={
+            "reloaded": True, "reload_reason": "already_current", "diagnostics": []})
+        try:
+            res = self._apply(fake)
+            text = self._text(res)
+            self.assertTrue(res["isError"], text)
+            self.assertIn("script error", text)
+            self.assertIn("That is not success", text)
+        finally:
+            fake.close()
+            project.close()
 
 
 if __name__ == "__main__":

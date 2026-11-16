@@ -76,7 +76,17 @@ def text(mid, payload, is_error=False) -> None:
                 "isError": is_error})
 
 
-STATE: dict = {"props": None, "made": set(), "gone": set(), "scene": None}
+STATE: dict = {"props": None, "made": set(), "gone": set(), "scene": None, "editor_logs": 0}
+
+
+def _with_reload(body: dict) -> dict:
+    raw = os.environ.get("FAKE_SCRIPT_RELOAD")
+    if not raw:
+        return body
+    extra = json.loads(raw)
+    if isinstance(extra, dict):
+        body.update(extra)
+    return body
 
 
 def _disk(res: str) -> Path | None:
@@ -214,7 +224,7 @@ def main() -> int:
                 if target is not None:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_text(str(prm.get("content") or ""), encoding="utf-8")
-                text(mid, {"path": prm.get("path"), "size": len(str(prm.get("content") or ""))})
+                text(mid, _with_reload({"path": prm.get("path"), "size": len(str(prm.get("content") or ""))}))
             elif name == "script_patch":
                 target = _disk(args.get("path"))
                 if target is not None and target.is_file() and isinstance(args.get("old_text"), str):
@@ -222,7 +232,7 @@ def main() -> int:
                     if args["old_text"] in body:
                         target.write_text(body.replace(args["old_text"], str(args.get("new_text") or ""), 1),
                                           encoding="utf-8")
-                text(mid, {"echo": params})
+                text(mid, _with_reload({"echo": params, "path": args.get("path")}))
             elif name == "filesystem_manage" and args.get("op") == "remove":
                 target = _disk((args.get("params") or {}).get("path"))
                 if target is not None and target.is_file():
@@ -333,7 +343,14 @@ def main() -> int:
                     "frames": [{"path": "res://addons/godot_ai/handlers/script_handler.gd", "line": 375}],
                 }]})
             elif name == "logs_read" and args.get("source") == "editor":
-                text(mid, {"lines": [], "total_count": 0, "source": "editor"})
+                lines = json.loads(os.environ.get("FAKE_EDITOR_LOGS") or "[]")
+                STATE["editor_logs"] = int(STATE.get("editor_logs") or 0) + 1
+                extra = os.environ.get("FAKE_EDITOR_LOGS_AFTER")
+                if extra and STATE["editor_logs"] > 1:
+                    more = json.loads(extra)
+                    if isinstance(more, list):
+                        lines = list(lines) + more
+                text(mid, {"lines": lines, "total_count": len(lines), "source": "editor"})
             elif name == "node_get_properties" and args.get("path") == "/Main/NoSuchNode":
                 text(mid, NODE_NOT_FOUND, True)
             elif name == "node_get_properties":
