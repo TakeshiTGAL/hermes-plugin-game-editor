@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.3
+
+- The 2.0.2 code still called the headless arm when `editor_headless` was null and the editor log contained `Failed to execute`, then said `--headless` was not added, because that return was discarded. That call is gone. When the editor command cannot be read, `--headless` is not added, including when the log contains `Failed to execute`. Arming then would start a windowed editor's game headless. `Failed to execute` stays the editor process stdout (`editor/run/editor_run.cpp`) and is not in `logs_read`.
+- When the editor is headless and the arm does not add `--headless`, the reply names why. Unsaved scene edits say to save or discard them and play again. A failed filesystem scan, a failed open of the arm scene, and a write error each say that and say to play again. If the arm ran and `editor/run/main_run_args` still has no `--headless`, the reply says that and names a windowed editor, or reopening so `--headless` is on the command line. It does not call every failed arm unsaved edits.
+- Godot AI 4.3.0 `script_handler.gd` `_refresh_loaded_gdscript` sets `reloaded` true and does not set `reload_reason` when `script.reload` returns OK. `already_current` still sets both. A script write whose reply is `reloaded` true with no `reload_reason` says `reloaded=true` and does not invent `reload_reason=reloaded`.
+- This is not a Hermes v0.23.1 API change. No new Hermes API is called. `requires_hermes` stays unset. Checked with this repo's tests (`HOME` set to a temporary directory).
+
 ## 2.0.2
 
 - A real Hermes v0.22.2 session on 2026-11-16 (headless Godot editor, `GODOT_AI_ALLOW_HEADLESS=1`, Godot AI 4.3.0) fixed `mover.gd` on disk. The editor log still held only the startup line `mover.gd:3 Parse Error: Expected parameter name`, and `apply_plan` treated that older line as the write's failure, so the model wrote the same file again. Both plays were `play_session ok=false failure=not_live` with `editor_headless` null and `headless_arm` null. The editor process stdout was `Failed to execute` at `editor/run/editor_run.cpp:183`. That line is not in `logs_read`. Godot AI 4.3.0 already sets `reloaded` and `reload_reason` on a script write (`script_handler.gd` `_refresh_loaded_gdscript`). A headless `EditorFileSystem.update_file` does not refresh a GDScript that `ResourceLoader` has not cached. `editor_state` does not say whether the editor is headless. This is not a Hermes v0.23.1 API change. The reply is the same on v0.22.2, v0.23.1 and canary-main. No new Hermes API is called. `requires_hermes` stays unset.

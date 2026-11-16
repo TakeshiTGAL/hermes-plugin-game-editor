@@ -66,7 +66,7 @@ def _load_sibling(name: str):
 
 studio = _load_sibling("studio")
 
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 UPSTREAM_VERSION = "4.3.0"
 HTTP_PORT = 8000
 WS_PORT = 9500
@@ -3530,30 +3530,53 @@ def _session_live(result: dict) -> bool:
     return isinstance(status, dict) and status.get("status") == "live"
 
 
-def _not_live_next(headless: bool | None, armed: bool | None) -> str:
+def _not_live_next(headless: bool | None, armed: bool | None, why: str = "") -> str:
     """What to do when the game process did not become live and this run named no new script error.
 
     --headless is added only when the editor command shows it. A windowed editor is not armed.
-    When the command cannot be read, it is not armed either: arming then would start a windowed
-    editor's game headless. Failed to execute is the editor process stdout (editor/run/editor_run.cpp)
-    and is not in logs_read, so this does not wait for that string.
+    When the command cannot be read, it is not armed either, including when the editor log contains
+    Failed to execute: arming then would start a windowed editor's game headless. That line is the
+    editor process stdout (editor/run/editor_run.cpp) and is not in logs_read, so this does not wait
+    for that string. A false arm names why. Unsaved scene edits are one reason. A failed filesystem
+    scan, a failed open of the arm scene, a write error, and main_run_args still missing --headless
+    are the others.
     """
-    if headless is True and armed:
+    if headless is True and armed is True:
         return ("--headless was added to editor/run/main_run_args in memory and the helper still did not "
                 "become live. Next: open the project in a windowed editor and play again. "
                 "editor/run/editor_run.cpp Failed to execute is the editor process stdout and is not in logs_read. "
                 "Do not rewrite a script for this.")
-    if headless is True:
+    if headless is True and armed is False and why == "unsaved":
         return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
                 "Next: save or discard unsaved scene edits, then play again so the arm can run. "
+                "Do not rewrite a script for this.")
+    if headless is True and armed is False and why == "scan_failed":
+        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
+                "The filesystem scan failed, so the arm scene was not opened. "
+                "Next: play again after the editor can scan the project. "
+                "Do not rewrite a script for this.")
+    if headless is True and armed is False and why == "scene_open_failed":
+        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
+                "Opening the arm scene failed. "
+                "Next: play again. "
+                "Do not rewrite a script for this.")
+    if headless is True and armed is False and why == "write_failed":
+        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
+                "The arm files could not be written. "
+                "Next: play again. "
+                "Do not rewrite a script for this.")
+    if headless is True and armed is False and why == "flag_missing":
+        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
+                "The arm ran and editor/run/main_run_args still has no --headless. "
+                "Next: open a windowed editor, or reopen so --headless is on the command line, then play again. "
+                "Do not rewrite a script for this.")
+    if headless is True:
+        return ("This editor is headless and --headless was not added to editor/run/main_run_args. "
+                "Next: open a windowed editor, or reopen so --headless is on the command line, then play again. "
                 "Do not rewrite a script for this.")
     if headless is False:
         return ("This editor is windowed, so --headless was not added. "
                 "Next: run the main scene from the editor and read its output. "
-                "Do not rewrite a script for this.")
-    if armed:
-        return ("editor_headless was null and --headless was added after the editor log named Failed to execute. "
-                "The helper still did not become live. Next: open a windowed editor and play again. "
                 "Do not rewrite a script for this.")
     return ("editor_headless is null, so --headless was not added to editor/run/main_run_args. "
             "A headless editor cannot launch a windowed Godot: EditorInterface.play_main_scene fails in "
@@ -7567,10 +7590,13 @@ class Bridge:
     def _refresh_written_script(self, path: str, result: dict, root: str | None, mid) -> str:
         """Say whether the editor's loaded copy matches a clean write, and re-read the open scene when it does not.
 
-        Godot AI 4.3.0 sets reloaded and reload_reason (script_handler.gd _refresh_loaded_gdscript). A reply
-        with no reloaded key is an older server: do not reload a scene. Headless EditorFileSystem.update_file
-        does not refresh a GDScript ResourceLoader has not cached, so not_loaded means the file changed and
-        the loaded copy did not. Re-read the open scene only when it names this script and no unsaved edit
+        Godot AI 4.3.0 sets reloaded true and does not set reload_reason when script.reload returns OK
+        (script_handler.gd _refresh_loaded_gdscript). It sets reload_reason already_current when the loaded
+        source already matches, and a reload_reason when the refresh did not happen. Quote reload_reason
+        only when the reply includes one. Do not invent reload_reason=reloaded. A reply with no reloaded
+        key is an older server: do not reload a scene. Headless EditorFileSystem.update_file does not
+        refresh a GDScript ResourceLoader has not cached, so not_loaded means the file changed and the
+        loaded copy did not. Re-read the open scene only when it names this script and no unsaved edit
         is on record. There is no reload_scripts op, and reload_plugin drops the connection.
         """
         data = _first_json(result)
@@ -7578,8 +7604,9 @@ class Bridge:
             return ""
         reason = data.get("reload_reason") if isinstance(data.get("reload_reason"), str) else ""
         if data.get("reloaded") is True or reason == "already_current":
+            shown = f"reloaded=true, reload_reason={reason}" if reason else "reloaded=true"
             return (f"game-editor: {path} is the new source and the editor reloaded it "
-                    f"(reloaded=true, reload_reason={reason or 'reloaded'}). "
+                    f"({shown}). "
                     "Do not write it again for an older editor-log line.")
         if reason == "csharp_requires_build":
             return (f"game-editor: {path} was written. C# is not reloaded until the .NET assembly is built "
@@ -9387,8 +9414,12 @@ class Bridge:
                        "writes res://ge_headless_arm.gd and res://ge_headless_arm.tscn, opens that scene so its "
                        "@tool script can set the argument, closes the scene, then removes the files. "
                        "project.godot is not left changed. This runs only when the editor command line shows "
-                       "--headless. When that command cannot be read, --headless is not added. A windowed editor "
-                       "is not given --headless. A headless editor cannot launch a windowed game: "
+                       "--headless. When that command cannot be read, --headless is not added, including when "
+                       "the editor log contains Failed to execute. A windowed editor "
+                       "is not given --headless. When this editor is headless and the arm does not add --headless, "
+                       "not_live names why: unsaved scene edits, a failed filesystem scan, a failed open of the arm "
+                       "scene, a write error, or editor/run/main_run_args still missing --headless. "
+                       "A headless editor cannot launch a windowed game: "
                        "EditorInterface.play_main_scene fails in editor/run/editor_run.cpp (Failed to execute). "
                        "That line is the editor process stdout and is not in logs_read. not_live then names the "
                        "next step and is not a reason to rewrite the script")
@@ -10369,14 +10400,16 @@ class Bridge:
             "project_manage", {"op": "settings_get", "params": {"key": "editor/run/main_run_args"}}, 20, mid)
         return "--headless" in json.dumps(got.get("content") or "")
 
-    def _arm_headless_child(self, root: str, mid) -> bool:
+    def _arm_headless_child(self, root: str, mid) -> tuple[bool, str]:
         """Set editor/run/main_run_args in memory so the game child is headless. Temporary files are removed
-        before this returns. project.godot is put back if the editor saved it. A windowed editor is not armed."""
+        before this returns. project.godot is put back if the editor saved it. A windowed editor is not armed.
+        An editor whose command cannot be read is not armed here. The second value is "" when the flag is
+        set, otherwise unsaved, scan_failed, scene_open_failed, write_failed or flag_missing."""
         if getattr(self, "_headless_armed", False) or self._settings_have_headless(mid):
             self._headless_armed = True
-            return True
+            return True, ""
         if self._unsaved_blocks_arm():
-            return False
+            return False, "unsaved"
         self._remember_project_snapshot(root)
         previous = self.current_scene()
         try:
@@ -10384,10 +10417,10 @@ class Bridge:
             self.disk_path(self._ARM_TSCN, root).write_text(self._ARM_SCENE, encoding="utf-8")
             scan = self.upstream("filesystem_manage", {"op": "scan", "params": {}}, 30, mid)
             if scan.get("isError") or scan.get("bridge_error"):
-                return False
+                return False, "scan_failed"
             opened = self.upstream("scene_open", {"path": self._ARM_TSCN}, 20, mid)
             if opened.get("isError") or opened.get("bridge_error"):
-                return False
+                return False, "scene_open_failed"
             # The scene closes itself on the next editor frame. Wait before deleting the file, or the tab stays
             # open on a path quit cannot name.
             deadline = time.time() + 3
@@ -10398,9 +10431,10 @@ class Bridge:
                 self.upstream("scene_open", {"path": previous}, 20, mid)
             if armed:
                 self._headless_armed = True
-            return armed
+                return True, ""
+            return False, "flag_missing"
         except OSError:
-            return False
+            return False, "write_failed"
         finally:
             self._remove_arm_files(root)
             snap = self._project_snapshot
@@ -10439,21 +10473,15 @@ class Bridge:
             run_args["scene"] = parsed["scene"]
         headless = self._editor_headless()
         armed = None
+        arm_why = ""
         if headless is True:
-            armed = self._arm_headless_child(root, mid)
+            armed, arm_why = self._arm_headless_child(root, mid)
         # Lines already in the log belong to an earlier run. Only lines after this read are this play.
+        # editor_headless null does not arm, including when the editor log contains Failed to execute.
         prior_logs = {source: self._log_snapshot(source, mid) for source in ("editor", "game")}
         started = self.upstream("project_run", run_args, CALL_TIMEOUT, mid)
         live = (not started.get("isError") and not started.get("bridge_error")
                 and _session_live(started))
-        if not live and headless is None:
-            logs = self.upstream("logs_read", {"source": "editor", "count": 40}, 15, mid)
-            if "Failed to execute" in json.dumps(logs.get("content") or ""):
-                if self._arm_headless_child(root, mid):
-                    prior_logs = {source: self._log_snapshot(source, mid) for source in ("editor", "game")}
-                    started = self.upstream("project_run", run_args, CALL_TIMEOUT, mid)
-                    live = (not started.get("isError") and not started.get("bridge_error")
-                            and _session_live(started))
         if not live:
             logged: list[str] = []
             for source in ("editor", "game"):
@@ -10501,7 +10529,7 @@ class Bridge:
             if started_status.get("active") is False:
                 bits.append("active=false")
             fact = (" " + " ".join(bits) + ".") if bits else ""
-            nxt = _not_live_next(headless, bool(armed))
+            nxt = _not_live_next(headless, armed, arm_why)
             summary = ("game-editor: play_session ok=false failure=not_live. Nothing was played. "
                        "The game process did not start." + fact + " " + nxt)
             payload = {"ok": False, "failure": "not_live", "editor_headless": headless,

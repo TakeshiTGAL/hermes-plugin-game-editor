@@ -2724,6 +2724,127 @@ class PlayExportTest(unittest.TestCase):
         self.assertEqual(payload["findings"], [])
         self.assertIn("editor_headless is null", payload["next"])
 
+    def _headless_not_live(self, root: str, *, logs=None, settings="", scan_error=False, open_error=False,
+                           scene="", edited=False):
+        bridge, calls = self._bridge()
+        bridge._editor_headless = lambda: True
+
+        def upstream(name, arguments, timeout=None, mid=None):
+            calls.append((name, arguments, timeout))
+            if name == "project_manage" and arguments.get("op") == "settings_get":
+                return {"content": [{"type": "text", "text": json.dumps({"value": settings})}], "isError": False}
+            if name == "project_run":
+                body = {"helper_live": False, "game_status": {
+                    "status": "stopped", "helper_expected": True, "helper_live": False, "active": False}}
+                return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+            if name == "logs_read":
+                body = {"lines": logs or []}
+                return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+            if name == "editor_state":
+                return {"content": [{"type": "text", "text": json.dumps({"current_scene": scene})}], "isError": False}
+            if name == "filesystem_manage" and scan_error:
+                return {"content": [{"type": "text", "text": "scan failed"}], "isError": True}
+            if name == "scene_open" and open_error:
+                return {"content": [{"type": "text", "text": "open failed"}], "isError": True}
+            return {"content": [{"type": "text", "text": "{}"}], "isError": False}
+
+        bridge.upstream = upstream
+        if edited and scene:
+            bridge.edited_props[scene] = {("N", "position"): {"prior": False, "value": {"x": 1}}}
+        result = bridge.play_session({"goal": "walk", "steps": [{"op": "wait", "seconds": 0.4}]}, root, None)
+        return bridge, calls, result
+
+    def test_unknown_headless_with_failed_to_execute_does_not_arm(self):
+        bridge, calls = self._bridge()
+
+        def upstream(name, arguments, timeout=None, mid=None):
+            calls.append((name, arguments, timeout))
+            if name == "project_run":
+                body = {"helper_live": False, "game_status": {
+                    "status": "stopped", "helper_expected": True, "helper_live": False, "active": False}}
+                return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+            if name == "logs_read":
+                body = {"lines": [{"text": "Failed to execute", "path": "editor/run/editor_run.cpp", "line": 183}]}
+                return {"content": [{"type": "text", "text": json.dumps(body)}], "isError": False}
+            return {"content": [{"type": "text", "text": "{}"}], "isError": False}
+
+        bridge.upstream = upstream
+        bridge._editor_headless = lambda: None
+        result = bridge.play_session({"goal": "walk", "steps": [{"op": "wait", "seconds": 0.4}]}, "/proj", None)
+        text = result["content"][0]["text"]
+        self.assertTrue(result["isError"], text)
+        self.assertIn("editor_headless is null, so --headless was not added", text)
+        self.assertNotIn("was added", text)
+        names = [name for name, _, _ in calls]
+        self.assertNotIn("scene_open", names)
+        self.assertNotIn("filesystem_manage", names)
+        payload = _payload(result)
+        self.assertIsNone(payload["editor_headless"])
+        self.assertIsNone(payload["headless_arm"])
+        self.assertIn("was not added", payload["next"])
+
+    def test_headless_arm_unsaved_names_unsaved(self):
+        root = tempfile.TemporaryDirectory()
+        try:
+            _bridge, calls, result = self._headless_not_live(root.name, scene="res://main.tscn", edited=True)
+            text = result["content"][0]["text"]
+            self.assertIn("save or discard unsaved scene edits", text)
+            self.assertNotIn("filesystem scan failed", text)
+            self.assertNotIn("filesystem_manage", [name for name, _, _ in calls])
+            self.assertIs(False, _payload(result)["headless_arm"])
+        finally:
+            root.cleanup()
+
+    def test_headless_arm_scan_failure_does_not_blame_unsaved(self):
+        root = tempfile.TemporaryDirectory()
+        try:
+            _bridge, calls, result = self._headless_not_live(root.name, scan_error=True)
+            text = result["content"][0]["text"]
+            self.assertIn("filesystem scan failed", text)
+            self.assertNotIn("save or discard unsaved", text)
+            self.assertIn("filesystem_manage", [name for name, _, _ in calls])
+            self.assertNotIn("scene_open", [name for name, _, _ in calls])
+            self.assertIs(False, _payload(result)["headless_arm"])
+        finally:
+            root.cleanup()
+
+    def test_headless_arm_scene_open_failure_does_not_blame_unsaved(self):
+        root = tempfile.TemporaryDirectory()
+        try:
+            _bridge, calls, result = self._headless_not_live(root.name, open_error=True)
+            text = result["content"][0]["text"]
+            self.assertIn("Opening the arm scene failed", text)
+            self.assertNotIn("save or discard unsaved", text)
+            self.assertIn("scene_open", [name for name, _, _ in calls])
+            self.assertIs(False, _payload(result)["headless_arm"])
+        finally:
+            root.cleanup()
+
+    def test_headless_arm_missing_flag_does_not_blame_unsaved(self):
+        root = tempfile.TemporaryDirectory()
+        try:
+            _bridge, _calls, result = self._headless_not_live(root.name)
+            text = result["content"][0]["text"]
+            self.assertIn("still has no --headless", text)
+            self.assertNotIn("save or discard unsaved", text)
+            self.assertIs(False, _payload(result)["headless_arm"])
+            self.assertFalse((Path(root.name) / "ge_headless_arm.gd").exists())
+            self.assertFalse((Path(root.name) / "ge_headless_arm.tscn").exists())
+        finally:
+            root.cleanup()
+
+    def test_headless_arm_write_error_does_not_blame_unsaved(self):
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        try:
+            _bridge, _calls, result = self._headless_not_live(handle.name)
+            text = result["content"][0]["text"]
+            self.assertIn("could not be written", text)
+            self.assertNotIn("save or discard unsaved", text)
+            self.assertIs(False, _payload(result)["headless_arm"])
+        finally:
+            Path(handle.name).unlink(missing_ok=True)
+
     def test_a_headless_editor_arms_and_removes_the_files(self):
         root = tempfile.TemporaryDirectory()
         try:
@@ -3456,10 +3577,27 @@ class ScriptReloadTest(unittest.TestCase):
             text = self._text(res)
             self.assertFalse(res["isError"], text)
             self.assertIn("the editor reloaded it", text)
+            self.assertIn("reload_reason=already_current", text)
+            self.assertNotIn("reload_reason=reloaded", text)
             self.assertNotIn("That is not success", text)
             self.assertFalse(any(
                 row["name"] == "scene_open" and (row.get("arguments") or {}).get("force_reload")
                 for row in fake.sent()))
+        finally:
+            fake.close()
+            project.close()
+
+    def test_reloaded_true_without_reason_does_not_invent_one(self):
+        project = self._project()
+        fake = self._fake(project, script_reload={"reloaded": True, "diagnostics": []})
+        try:
+            res = self._apply(fake)
+            text = self._text(res)
+            self.assertFalse(res["isError"], text)
+            self.assertIn("the editor reloaded it", text)
+            self.assertIn("(reloaded=true)", text)
+            self.assertNotIn("reload_reason", text)
+            self.assertNotIn("reload_reason=reloaded", text)
         finally:
             fake.close()
             project.close()
